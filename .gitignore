@@ -55,7 +55,7 @@ coverage.xml
 *.cover
 .cache
 nosetests.xml
-
+run_trader.sh
 # 其他
 .DS_Store
 .env.local
