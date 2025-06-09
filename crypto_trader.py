@@ -152,7 +152,9 @@ class CryptoTrader:
         # 交易条件配置
         self.asks_shares = 100                 # 买入触发条件之一:最少成交数量SHARES(UP)
         self.bids_shares = 100                 # 买入触发条件之一:最少成交数量SHARES(DOWN)
-        self.button_width = 8                  # 按钮区域按键宽度
+        
+        # 按钮区域按键宽度
+        self.button_width = 8                  
         
         # 停止事件
         self.stop_event = threading.Event()
@@ -188,13 +190,13 @@ class CryptoTrader:
                     'Up2': {'target_price': 0, 'amount': 0},
                     'Up3': {'target_price': 0, 'amount': 0},
                     'Up4': {'target_price': 0, 'amount': 0},
-                    'Up5': {'target_price': 0, 'amount': 0},
+                    'Up5': {'target_price': 0, 'amount': None},  # 移除amount属性
 
                     'Down1': {'target_price': 0, 'amount': 0},
                     'Down2': {'target_price': 0, 'amount': 0},
                     'Down3': {'target_price': 0, 'amount': 0},
                     'Down4': {'target_price': 0, 'amount': 0},
-                    'Down5': {'target_price': 0, 'amount': 0}
+                    'Down5': {'target_price': 0, 'amount': None}  # 移除amount属性
                 },
                 'url_history': []
             }
@@ -603,7 +605,7 @@ class CryptoTrader:
             ("Yes2", "yes2_price_entry", "yes2_amount_entry", "0", "0"),
             ("Yes3", "yes3_price_entry", "yes3_amount_entry", "0", "0"),
             ("Yes4", "yes4_price_entry", "yes4_amount_entry", "0", "0"),
-            ("Yes5", "yes5_price_entry", "yes5_amount_entry", "0", "0")
+            ("Yes5", "yes5_price_entry", None, "0", None)
         ]
         
         for i, (label, price_attr, amount_attr, price_val, amount_val) in enumerate(yes_configs):
@@ -617,13 +619,14 @@ class CryptoTrader:
             price_entry.grid(row=row_base, column=1, padx=3, pady=2, sticky="ew")
             setattr(self, price_attr, price_entry)
             
-            # 金额标签和输入框
-            ttk.Label(self.yes_frame, text=f"{label} Amount:", style='Black.TLabel').grid(
-                row=row_base+1, column=0, padx=3, pady=2, sticky="w")
-            amount_entry = ttk.Entry(self.yes_frame, font=base_font)
-            amount_entry.insert(0, amount_val)
-            amount_entry.grid(row=row_base+1, column=1, padx=3, pady=2, sticky="ew")
-            setattr(self, amount_attr, amount_entry)
+            # 金额标签和输入框 - 仅为Yes1-4创建
+            if amount_attr:
+                ttk.Label(self.yes_frame, text=f"{label} Amount:", style='Black.TLabel').grid(
+                    row=row_base+1, column=0, padx=3, pady=2, sticky="w")
+                amount_entry = ttk.Entry(self.yes_frame, font=base_font)
+                amount_entry.insert(0, amount_val if amount_val else "0")
+                amount_entry.grid(row=row_base+1, column=1, padx=3, pady=2, sticky="ew")
+                setattr(self, amount_attr, amount_entry)
         
         # 配置列权重
         self.yes_frame.grid_columnconfigure(1, weight=1)
@@ -636,7 +639,7 @@ class CryptoTrader:
             ("No2", "no2_price_entry", "no2_amount_entry", "0", "0"),
             ("No3", "no3_price_entry", "no3_amount_entry", "0", "0"),
             ("No4", "no4_price_entry", "no4_amount_entry", "0", "0"),
-            ("No5", "no5_price_entry", "no5_amount_entry", "0", "0")
+            ("No5", "no5_price_entry", None, "0", None)
         ]
         
         for i, (label, price_attr, amount_attr, price_val, amount_val) in enumerate(no_configs):
@@ -650,13 +653,14 @@ class CryptoTrader:
             price_entry.grid(row=row_base, column=1, padx=3, pady=2, sticky="ew")
             setattr(self, price_attr, price_entry)
             
-            # 金额标签和输入框
-            ttk.Label(self.no_frame, text=f"{label} Amount:", style='Black.TLabel').grid(
-                row=row_base+1, column=0, padx=3, pady=2, sticky="w")
-            amount_entry = ttk.Entry(self.no_frame, font=base_font)
-            amount_entry.insert(0, amount_val)
-            amount_entry.grid(row=row_base+1, column=1, padx=3, pady=2, sticky="ew")
-            setattr(self, amount_attr, amount_entry)
+            # 金额标签和输入框 - 仅为No1-4创建
+            if amount_attr:
+                ttk.Label(self.no_frame, text=f"{label} Amount:", style='Black.TLabel').grid(
+                    row=row_base+1, column=0, padx=3, pady=2, sticky="w")
+                amount_entry = ttk.Entry(self.no_frame, font=base_font)
+                amount_entry.insert(0, amount_val if amount_val else "0")
+                amount_entry.grid(row=row_base+1, column=1, padx=3, pady=2, sticky="ew")
+                setattr(self, amount_attr, amount_entry)
         
         # 配置列权重
         self.no_frame.grid_columnconfigure(1, weight=1)
