@@ -21,8 +21,6 @@ from screeninfo import get_monitors
 import logging
 from datetime import datetime, timezone, timedelta
 import re
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.common.action_chains import ActionChains
 import pyautogui
 import smtplib
 from email.mime.text import MIMEText
@@ -30,15 +28,15 @@ from email.mime.multipart import MIMEMultipart
 from email.header import Header
 import socket
 import sys
-import logging
+import requests
+import websocket
 from xpath_config import XPathConfig
 from threading import Thread
 import random
-import requests
-import websocket
 
 
 class Logger:
+    """日志管理类，提供统一的日志记录功能"""
     def __init__(self, name):
         self.logger = logging.getLogger(name)
         self.logger.setLevel(logging.DEBUG)
@@ -85,31 +83,43 @@ class Logger:
         self.logger.critical(message)
 
 class CryptoTrader:
+    """
+    加密货币自动交易系统，用于 Polymarket 平台的自动化交易
+    
+    功能包括：
+    - 价格监控和自动交易
+    - 自动登录和会话维护
+    - 多级交易策略执行
+    - 账户余额监控
+    - 自动寻找新的交易机会
+    """
     def __init__(self):
         super().__init__()
+        # 日志初始化
         self.logger = Logger('poly')
+        
+        # 浏览器和状态控制
         self.driver = None
         self.running = False
         self.trading = False
         self.login_running = False
-        # 添加交易状态
         self.start_login_monitoring_running = False
         self.url_monitoring_running = False
         self.refresh_page_running = False
-
-        # 添加重试次数和间隔
+        self.is_restarting = False  # 重启状态标志
+        
+        # 重试策略配置
         self.retry_count = 3
         self.retry_interval = 5
-
-        # 添加交易次数计数器
+        
+        # 交易计数
         self.trade_count = 0
         self.sell_count = 0 
         self.reset_trade_count = 0 
         
-        # 添加定时器
-        self.refresh_page_timer = None  # 用于存储定时器ID
+        # 定时器管理
+        self.refresh_page_timer = None
         self.url_check_timer = None
-        # 添加登录状态监控定时器
         self.login_check_timer = None
         self.monitor_xpath_timer = None
         self.get_zero_time_cash_timer = None
@@ -117,56 +127,49 @@ class CryptoTrader:
         self.get_binance_price_websocket_timer = None
         self.comparison_binance_price_timer = None
         self.schedule_auto_find_coin_timer = None
-
-        # 添加URL and refresh_page监控锁
+        self.refresh_timer = None  # 添加refresh_timer变量
+        self.monitor_prices_timer = None  # 添加monitor_prices_timer变量
+        
+        # 线程同步锁
         self.url_monitoring_lock = threading.Lock()
         self.refresh_page_lock = threading.Lock()
         self.login_attempt_lock = threading.Lock()
-        self.restart_lock = threading.Lock()  # 添加重启锁
-        self.is_restarting = False  # 重启状态标志
-
-        # 初始化本金
-        self.initial_amount = 2.5
-        self.first_rebound = 220
-        self.n_rebound = 120
-        self.profit_rate = 2.2
-        self.doubling_weeks = 30
-
-        # 默认买价
-        self.default_target_price = 52 # 不修改
-        # 默认反水卖价
-        self.default_sell_price_backwater = 47 # 不修改
-        # 默认卖价
-        self.default_sell_price = 1 # 不修改
-
-        # 默认卖价
-        self.default_normal_sell_price = 99 # 不修改
-
-        # 买入价格冗余
-        self.price_premium = 3 # 不修改
-
-        # 买入触发条件之一:最少成交数量SHARES
-        self.asks_shares = 100 # 不修改
-        self.bids_shares = 100# 不修改
+        self.restart_lock = threading.Lock()
         
-        # 按钮区域按键 WIDTH
-        self.button_width = 8 # 不修改
+        # 交易参数配置
+        self.initial_amount = 2.5              # 初始资金比例 (%)
+        self.first_rebound = 220               # 第一次反水比例 (%)
+        self.n_rebound = 120                   # 后续反水比例 (%)
+        self.profit_rate = 2.2                 # 利润率 (%)
+        self.doubling_weeks = 30               # 翻倍周期 (天)
+        
+        # 交易价格配置
+        self.default_target_price = 52         # 默认买价
+        self.default_sell_price_backwater = 47 # 默认反水卖价
+        self.default_sell_price = 1            # 默认卖价
+        self.default_normal_sell_price = 99    # 默认正常卖价
+        self.price_premium = 3                 # 买入价格冗余
+        
+        # 交易条件配置
+        self.asks_shares = 100                 # 买入触发条件之一:最少成交数量SHARES(UP)
+        self.bids_shares = 100                 # 买入触发条件之一:最少成交数量SHARES(DOWN)
+        self.button_width = 8                  # 按钮区域按键宽度
+        
         # 停止事件
         self.stop_event = threading.Event()
+        
+        # 元素缓存
+        self.element_cache = {}
+        
         # 初始化金额为 0
         for i in range(1, 4):  # 1到4
             setattr(self, f'yes{i}_amount', 0)
             setattr(self, f'no{i}_amount', 0)
+            
         # 初始化 UI 界面
         try:
             self.config = self.load_config()
             self.setup_gui()
-            # 注释掉固定窗口大小的设置，让后面的自适应代码处理
-            # self.root.update_idletasks()  # 确保窗口尺寸已计算
-            # window_width = self.root.winfo_width()
-            # screen_height = self.root.winfo_screenheight()
-            # 设置窗口位置在屏幕最左边
-            # self.root.geometry(f"{window_width}x{screen_height}+0+0")
         except Exception as e:
             self.logger.error(f"初始化失败: {str(e)}")
             messagebox.showerror("错误", "程序初始化失败，请检查日志文件")
@@ -203,7 +206,7 @@ class CryptoTrader:
                     saved_config = json.load(f)
                     self.logger.info("✅ 成功加载配置文件")
                     
-                    # 合并配置
+                    # 合并配置，确保所有必要字段存在
                     for key in default_config:
                         if key not in saved_config:
                             saved_config[key] = default_config[key]
@@ -227,34 +230,31 @@ class CryptoTrader:
             raise
     
     def save_config(self):
-        """保存配置到文件,保持JSON格式化"""
+        """保存配置到文件"""
         try:
+            # 获取当前交易价格和金额
             for position, frame in [('Yes', self.yes_frame), ('No', self.no_frame)]:
-                # 精确获取目标价格和金额的输入框
-                entries = [
-                    w for w in frame.winfo_children() 
-                    if isinstance(w, ttk.Entry) and "price" in str(w).lower()
-                ]
-                amount_entries = [
-                    w for w in frame.winfo_children()
-                    if isinstance(w, ttk.Entry) and "amount" in str(w).lower()
-                ]
+                # 获取价格和金额输入框
+                entries = [w for w in frame.winfo_children() 
+                          if isinstance(w, ttk.Entry) and "price" in str(w).lower()]
+                amount_entries = [w for w in frame.winfo_children()
+                                 if isinstance(w, ttk.Entry) and "amount" in str(w).lower()]
 
-                # 添加类型转换保护
+                # 安全转换为数值
                 try:
                     target_price = float(entries[0].get().strip() or '0') if entries else 0
-                except ValueError as e:
-                    self.logger.error(f"价格转换失败: {e}, 使用默认值0")
+                except ValueError:
+                    self.logger.error("价格转换失败，使用默认值0")
                     target_price = 0
 
                 try:
                     amount = float(amount_entries[0].get().strip() or '0') if amount_entries else 0
-                except ValueError as e:
-                    self.logger.error(f"金额转换失败: {e}, 使用默认值0")
+                except ValueError:
+                    self.logger.error("金额转换失败，使用默认值0")
                     amount = 0
 
-                # 使用正确的配置键格式
-                config_key = f"{position}1"  # 改为Yes1/No1
+                # 更新配置
+                config_key = f"{position}1"
                 self.config['trading'][config_key]['target_price'] = target_price
                 self.config['trading'][config_key]['amount'] = amount
 
@@ -264,17 +264,13 @@ class CryptoTrader:
                 if 'url_history' not in self.config:
                     self.config['url_history'] = []
                 
-                # 清空历史记录
-                self.config['url_history'].clear()
-                # 只保留当前URL
-                self.config['url_history'].insert(0, current_url)
-                # 确保最多保留1条
-                self.config['url_history'] = self.config['url_history'][:1]
+                # 保留当前URL作为唯一历史记录
+                self.config['url_history'] = [current_url]
                 self.url_entry['values'] = self.config['url_history']
             
-            # 保存配置到文件，使用indent=4确保格式化
+            # 保存配置到文件
             with open('config.json', 'w', encoding='utf-8') as f:
-                json.dump(self.config, f)
+                json.dump(self.config, f, indent=4, ensure_ascii=False)
                 
         except Exception as e:
             self.logger.error(f"保存配置失败: {str(e)}")
@@ -790,13 +786,13 @@ class CryptoTrader:
                 chrome_options.debugger_address = "127.0.0.1:9222"
                 chrome_options.add_argument('--disable-dev-shm-usage')
                 
+                # 根据操作系统添加特定配置
                 system = platform.system()
                 if system == 'Linux':
-                    # 添加与启动脚本一致的所有参数
+                    # 添加Linux系统下的优化参数
                     chrome_options.add_argument('--no-sandbox')
                     chrome_options.add_argument('--disable-gpu')
                     chrome_options.add_argument('--disable-software-rasterizer')
-                    chrome_options.add_argument('--disable-dev-shm-usage')
                     chrome_options.add_argument('--disable-background-networking')
                     chrome_options.add_argument('--disable-default-apps')
                     chrome_options.add_argument('--disable-extensions')
@@ -811,46 +807,42 @@ class CryptoTrader:
                     chrome_options.add_argument('--noerrdialogs')
 
                 self.driver = webdriver.Chrome(options=chrome_options)
+            
+            # 在当前标签页打开URL
+            self.driver.get(new_url)
+            
+            # 等待页面加载
+            WebDriverWait(self.driver, 60).until(
+                lambda driver: driver.execute_script('return document.readyState') == 'complete'
+            )
+            self.logger.info("\033[34m✅ 浏览器启动成功!\033[0m")
+            
+            # 保存配置
+            if 'website' not in self.config:
+                self.config['website'] = {}
+            self.config['website']['url'] = new_url
+            self.save_config()
+            
+            # 更新交易币对显示
             try:
-                # 在当前标签页打开URL
-                self.driver.get(new_url)
+                pair = re.search(r'event/([^?]+)', new_url)
+                if pair:
+                    self.trading_pair_label.config(text=pair.group(1))
+                else:
+                    self.trading_pair_label.config(text="无识别事件名称")
+            except Exception:
+                self.trading_pair_label.config(text="解析失败")
                 
-                # 等待页面加载
-                WebDriverWait(self.driver, 60).until(
-                    lambda driver: driver.execute_script('return document.readyState') == 'complete'
-                )
-                self.logger.info("\033[34m✅ 浏览器启动成功!\033[0m")
-                # 保存配置
-                if 'website' not in self.config:
-                    self.config['website'] = {}
-                self.config['website']['url'] = new_url
-                self.save_config()
+            # 开启监控
+            self.running = True
+            
+            # 启动监控线程
+            self.monitoring_thread = threading.Thread(target=self.monitor_prices, daemon=True)
+            self.monitoring_thread.start()
+            self.logger.info("\033[34m✅ 启动实时监控价格和资金线程\033[0m")
                 
-                # 更新交易币对显示
-                try:
-                    pair = re.search(r'event/([^?]+)', new_url)
-                    if pair:
-                        self.trading_pair_label.config(text=pair.group(1))
-                    else:
-                        self.trading_pair_label.config(text="无识别事件名称")
-                except Exception:
-                    self.trading_pair_label.config(text="解析失败")
-                    
-                #  开启监控
-                self.running = True
-                
-                # 启动监控线程
-                self.monitoring_thread = threading.Thread(target=self.monitor_prices, daemon=True)
-                self.monitoring_thread.start()
-                self.logger.info("\033[34m✅ 启动实时监控价格和资金线程\033[0m")
-                
-            except Exception as e:
-                error_msg = f"加载网站失败: {str(e)}"
-                self.logger.error(error_msg)
-                self._show_error_and_reset(error_msg)  
         except Exception as e:
-            error_msg = f"启动浏览器失败: {str(e)}"
-            self.logger.error(f"启动监控失败: {str(e)}")
+            error_msg = f"浏览器启动或页面加载失败: {str(e)}"
             self.logger.error(error_msg)
             self._show_error_and_reset(error_msg)
 
@@ -913,10 +905,12 @@ class CryptoTrader:
                 self.logger.error(f"加载页面失败: {str(e)}")
             self.stop_monitoring()
     
-    def restart_browser(self,force_restart=True):
+    def restart_browser(self, force_restart=True):
         """统一的浏览器重启/重连函数
         Args:
             force_restart: True=强制重启Chrome进程,False=尝试重连现有进程
+        Returns:
+            bool: 重启是否成功
         """
         # 检查是否已在重启中
         with self.restart_lock:
@@ -955,93 +949,95 @@ class CryptoTrader:
                                              stderr=subprocess.PIPE)
                     
                     # 等待Chrome调试端口可用
-                    max_wait_time = 30
-                    wait_interval = 1
-                    for wait_time in range(0, max_wait_time, wait_interval):
-                        time.sleep(wait_interval)
-                        try:
-                            # 检查调试端口是否可用
-                            import requests
-                            response = requests.get('http://127.0.0.1:9222/json', timeout=2)
-                            if response.status_code == 200:
-                                self.logger.info(f"✅ Chrome浏览器已重新启动，调试端口可用 (等待{wait_time+1}秒)")
-                                break
-                        except:
-                            continue
-                    else:
-                        raise Exception("Chrome调试端口在30秒内未能启动")
+                    self._wait_for_chrome_port(max_wait_time=30, wait_interval=1)
                     
                 except Exception as e:
                     self.logger.error(f"启动Chrome失败: {e}")
-                    self.restart_browser(force_restart=True)
                     return False
             
             # 3. 重新连接浏览器（带重试机制）
-            max_retries = 3
-            for attempt in range(max_retries):
-                try:
-                    chrome_options = Options()
-                    chrome_options.debugger_address = "127.0.0.1:9222"
-                    chrome_options.add_argument('--disable-dev-shm-usage')
-                    
-                    # Linux特定配置
-                    if platform.system() == 'Linux':
-                        
-                        # 添加与启动脚本一致的所有参数
-                        chrome_options.add_argument('--no-sandbox')
-                        chrome_options.add_argument('--disable-gpu')
-                        chrome_options.add_argument('--disable-software-rasterizer')
-                        chrome_options.add_argument('--disable-dev-shm-usage')
-                        chrome_options.add_argument('--disable-background-networking')
-                        chrome_options.add_argument('--disable-default-apps')
-                        chrome_options.add_argument('--disable-extensions')
-                        chrome_options.add_argument('--disable-sync')
-                        chrome_options.add_argument('--metrics-recording-only')
-                        chrome_options.add_argument('--no-first-run')
-                        chrome_options.add_argument('--disable-translate')
-                        chrome_options.add_argument('--disable-background-timer-throttling')
-                        chrome_options.add_argument('--disable-backgrounding-occluded-windows')
-                        chrome_options.add_argument('--disable-renderer-backgrounding')
-                        chrome_options.add_argument('--disable-features=TranslateUI,BlinkGenPropertyTrees,SitePerProcess,IsolateOrigins')
-                        chrome_options.add_argument('--noerrdialogs')
-                    self.driver = webdriver.Chrome(options=chrome_options)
-                    
-                    # 验证连接
-                    self.driver.execute_script("return navigator.userAgent")
-                    
-                    # 加载目标URL
-                    target_url = self.url_entry.get()
-                    if target_url:
-                        self.driver.get(target_url)
-                        WebDriverWait(self.driver, 15).until(
-                            lambda d: d.execute_script('return document.readyState') == 'complete'
-                        )
-                        self.logger.info(f"✅ 成功加载页面: {target_url}")
-                    
-                    self.logger.info("✅ 浏览器连接成功")
-
-                    # 连接成功后，重置监控线程
-                    self._restore_monitoring_state()
-                    return True
-                    
-                except Exception as e:
-                    if attempt < max_retries - 1:
-                        self.logger.warning(f"连接失败 ({attempt+1}/{max_retries}),2秒后重试: {e}")
-                        time.sleep(2)
-                    else:
-                        self.logger.error(f"浏览器连接最终失败: {e}")
-                        return False
-            return False
+            success = self._reconnect_browser(max_retries=3)
+            if success:
+                # 连接成功后，重置监控线程
+                self._restore_monitoring_state()
+                return True
+            else:
+                return False
             
-        except Exception as e:
-            self.logger.error(f"浏览器重启失败: {e}")
-            return False
         except Exception as e:
             self.logger.error(f"浏览器重启失败: {e}")
             return False
         finally:
             with self.restart_lock:
                 self.is_restarting = False
+    
+    def _wait_for_chrome_port(self, max_wait_time=30, wait_interval=1):
+        """等待Chrome调试端口可用"""
+        for wait_time in range(0, max_wait_time, wait_interval):
+            time.sleep(wait_interval)
+            try:
+                # 检查调试端口是否可用
+                import requests
+                response = requests.get('http://127.0.0.1:9222/json', timeout=2)
+                if response.status_code == 200:
+                    self.logger.info(f"✅ Chrome浏览器已重新启动，调试端口可用 (等待{wait_time+1}秒)")
+                    return True
+            except:
+                continue
+        raise Exception("Chrome调试端口在30秒内未能启动")
+        
+    def _reconnect_browser(self, max_retries=3):
+        """尝试重新连接到浏览器实例"""
+        for attempt in range(max_retries):
+            try:
+                chrome_options = Options()
+                chrome_options.debugger_address = "127.0.0.1:9222"
+                chrome_options.add_argument('--disable-dev-shm-usage')
+                
+                # Linux特定配置
+                if platform.system() == 'Linux':
+                    # 添加Linux系统下的优化参数
+                    chrome_options.add_argument('--no-sandbox')
+                    chrome_options.add_argument('--disable-gpu')
+                    chrome_options.add_argument('--disable-software-rasterizer')
+                    chrome_options.add_argument('--disable-background-networking')
+                    chrome_options.add_argument('--disable-default-apps')
+                    chrome_options.add_argument('--disable-extensions')
+                    chrome_options.add_argument('--disable-sync')
+                    chrome_options.add_argument('--metrics-recording-only')
+                    chrome_options.add_argument('--no-first-run')
+                    chrome_options.add_argument('--disable-translate')
+                    chrome_options.add_argument('--disable-background-timer-throttling')
+                    chrome_options.add_argument('--disable-backgrounding-occluded-windows')
+                    chrome_options.add_argument('--disable-renderer-backgrounding')
+                    chrome_options.add_argument('--disable-features=TranslateUI,BlinkGenPropertyTrees,SitePerProcess,IsolateOrigins')
+                    chrome_options.add_argument('--noerrdialogs')
+                
+                self.driver = webdriver.Chrome(options=chrome_options)
+                
+                # 验证连接
+                self.driver.execute_script("return navigator.userAgent")
+                
+                # 加载目标URL
+                target_url = self.url_entry.get()
+                if target_url:
+                    self.driver.get(target_url)
+                    WebDriverWait(self.driver, 15).until(
+                        lambda d: d.execute_script('return document.readyState') == 'complete'
+                    )
+                    self.logger.info(f"✅ 成功加载页面: {target_url}")
+                
+                self.logger.info("✅ 浏览器连接成功")
+                return True
+                
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    self.logger.warning(f"连接失败 ({attempt+1}/{max_retries}),2秒后重试: {e}")
+                    time.sleep(2)
+                else:
+                    self.logger.error(f"浏览器连接最终失败: {e}")
+                    return False
+        return False
 
     def _restore_monitoring_state(self):
         """恢复监控状态 - 重新同步监控逻辑，确保所有监控功能正常工作"""
@@ -1051,42 +1047,30 @@ class CryptoTrader:
             # 确保运行状态正确
             self.running = True
             
-            # 重新启动各种监控功能（不是重新创建定时器，而是确保监控逻辑正常）
+            # 定义监控定时器重置函数
+            def reset_timer(timer_attr, start_func):
+                if hasattr(self, timer_attr) and getattr(self, timer_attr):
+                    self.root.after_cancel(getattr(self, timer_attr))
+                start_func()
             
-            # 1. 重新启动登录监控（如果当前没有运行）
-            if hasattr(self, 'login_check_timer') and self.login_check_timer:
-                self.root.after_cancel(self.login_check_timer)
-            self.start_login_monitoring()
+            # 重启关键监控功能
+            monitors = [
+                ('login_check_timer', self.start_login_monitoring),
+                ('url_check_timer', self.start_url_monitoring),
+                ('refresh_page_timer', self.refresh_page),
+                ('monitor_xpath_timer', self.monitor_xpath_elements),
+                ('comparison_binance_price_timer', self.comparison_binance_price),
+                ('schedule_auto_find_coin_timer', self.schedule_auto_find_coin)
+            ]
             
-            # 2. 重新启动URL监控（如果当前没有运行）
-            if hasattr(self, 'url_check_timer') and self.url_check_timer:
-                self.root.after_cancel(self.url_check_timer) 
-            self.start_url_monitoring()
-
-            # 3. 重新启动页面刷新监控（如果当前没有运行）
-            if hasattr(self, 'refresh_page_timer') and self.refresh_page_timer:
-                self.root.after_cancel(self.refresh_page_timer)     
-            self.refresh_page()
-
-            # 4. 重新启动XPath元素监控（如果当前没有运行）
-            if hasattr(self, 'monitor_xpath_timer') and self.monitor_xpath_timer:
-                self.root.after_cancel(self.monitor_xpath_timer)
-            self.monitor_xpath_elements()
-
-            # 6.重新开始价格比较
-            if hasattr(self,'comparison_binance_price_timer') and self.comparison_binance_price_timer:
-                self.root.after_cancel(self.comparison_binance_price_timer)
-            self.comparison_binance_price()
-
-            # 7.重新启动自动找币功能
-            if hasattr(self,'schedule_auto_find_coin_timer') and self.schedule_auto_find_coin_timer:
-                self.root.after_cancel(self.schedule_auto_find_coin_timer)
-            self.schedule_auto_find_coin()
+            # 重置各监控定时器
+            for timer_attr, start_func in monitors:
+                reset_timer(timer_attr, start_func)
             
             # 智能恢复时间敏感类定时器
             current_time = datetime.now()
             
-            # 8. binance_zero_timer: 计算到下一个零点的时间差
+            # 1. 计算到下一个零点的时间差
             next_zero_time = current_time.replace(hour=0, minute=0, second=0, microsecond=0)
             if current_time >= next_zero_time:
                 next_zero_time += timedelta(days=1)
@@ -1095,11 +1079,13 @@ class CryptoTrader:
             
             # 只在合理的时间范围内恢复零点价格定时器
             if seconds_until_next_run > 0:
-                self.get_binance_zero_time_price_timer = self.root.after(seconds_until_next_run, self.get_binance_zero_time_price)
+                self.get_binance_zero_time_price_timer = self.root.after(
+                    seconds_until_next_run, 
+                    self.get_binance_zero_time_price
+                )
                 self.logger.info(f"✅ 恢复零点价格定时器，{round(seconds_until_next_run / 3600000, 2)} 小时后执行")
             
-            # 9. zero_cash_timer: 类似的计算逻辑
-            # 现金监控可以稍微提前一点，比如在23:59:30开始
+            # 2. 计算到23:59:30的时间差（零点现金监控）
             next_cash_time = current_time.replace(hour=23, minute=59, second=30, microsecond=0)
             if current_time >= next_cash_time:
                 next_cash_time += timedelta(days=1)
@@ -1107,7 +1093,10 @@ class CryptoTrader:
             seconds_until_cash_run = int((next_cash_time - current_time).total_seconds() * 1000)
             
             if seconds_until_cash_run > 0:
-                self.get_zero_time_cash_timer = self.root.after(seconds_until_cash_run, self.get_zero_time_cash)
+                self.get_zero_time_cash_timer = self.root.after(
+                    seconds_until_cash_run, 
+                    self.get_zero_time_cash
+                )
                 self.logger.info(f"✅ 恢复零点现金定时器，{round(seconds_until_cash_run / 3600000, 2)} 小时后执行")
             
             self.logger.info("✅ 监控状态恢复完成")
@@ -1178,6 +1167,64 @@ class CryptoTrader:
         except Exception as e:
             self.logger.error(f"发送Chrome异常警报邮件时出错: {str(e)}")
 
+    def _find_element_with_retry(self, xpaths, timeout=3, silent=False):
+        """优化版XPATH元素查找(增强空值处理)
+        
+        Args:
+            xpaths: XPath表达式列表
+            timeout: 超时时间（秒）
+            silent: 是否静默错误
+            
+        Returns:
+            找到的WebElement或None
+        """
+        try:
+            for i, xpath in enumerate(xpaths, 1):
+                try:
+                    element = WebDriverWait(self.driver, timeout).until(
+                        EC.element_to_be_clickable((By.XPATH, xpath))
+                    )
+                    return element
+                except TimeoutException:
+                    if not silent:
+                        self.logger.warning(f"第{i}个XPATH定位超时: {xpath}")
+                    continue
+        except Exception as e:
+            if not silent:
+                self.logger.error(f"元素查找失败: {str(e)}")
+        return None
+
+    def _get_cached_element(self, xpath_key, refresh=False):
+        """获取DOM元素,优先从缓存获取
+        
+        Args:
+            xpath_key: XPathConfig中的键名或XPath列表
+            refresh: 是否强制刷新缓存         
+        
+        Returns:
+            WebElement: 找到的DOM元素或None
+        """
+        # 如果传入的是XPath列表，直接使用
+        if isinstance(xpath_key, list):
+            xpath_list = xpath_key
+            cache_key = xpath_list[0]  # 使用第一个XPath作为缓存键
+        else:
+            # 否则从XPathConfig获取XPath列表
+            xpath_list = getattr(XPathConfig, xpath_key)
+            cache_key = xpath_key
+            
+        # 初始化缓存字典（如果不存在）
+        if not hasattr(self, 'element_cache'):
+            self.element_cache = {}
+            
+        # 如果需要刷新缓存或元素不在缓存中或元素已过期
+        if refresh or cache_key not in self.element_cache:
+            element = self._find_element_with_retry(xpath_list, timeout=3, silent=True)
+            if element:
+                self.element_cache[cache_key] = element
+                
+        return self.element_cache.get(cache_key)
+        
     def get_nearby_cents(self):
         """获取spread附近的价格数字"""
         # 根据规律直接获取对应位置的值
@@ -1185,30 +1232,30 @@ class CryptoTrader:
         asks_shares_val = None
         down_price_val = None
         bids_shares_val = None
+        up_price_str = None
+        asks_shares_str = None
+        down_price_str = None  
+        bids_shares_str = None
 
-        # 定位 Spread 元素
-        keyword_element = None
         try:
-            keyword_element = self.driver.find_element(By.XPATH, XPathConfig.SPREAD[0])
-        except NoSuchElementException:
-            #self.logger.warning(f"SPREAD元素最终未找到: {keyword_element}")
-            return None, None, None, None   
-        # 获取container
-        container = None
-        try:
-            container = keyword_element.find_element(By.XPATH, './ancestor::div[3]')
-        except NoSuchElementException:
-            #self.logger.warning(f"SPREAD元素 '{keyword_element.text}' 的ancestor::div[3] (container) 未找到")
-            return None, None, None, None
-        
-        if not container:
-            #self.logger.warning("Container for SPREAD not found (was None after trying to get ancestor).")
-            return None, None, None, None         
-        # 取兄弟节点
-        above_element_texts = []
-        below_element_texts = []
-        try:
-            # JavaScript to get trimmed text content of previous and next siblings in one call
+            # 定位 Spread 元素
+            keyword_element = None
+            try:
+                keyword_element = self.driver.find_element(By.XPATH, XPathConfig.SPREAD[0])
+            except NoSuchElementException:
+                return None, None, None, None   
+                
+            # 获取container
+            container = None
+            try:
+                container = keyword_element.find_element(By.XPATH, './ancestor::div[3]')
+            except NoSuchElementException:
+                return None, None, None, None
+            
+            if not container:
+                return None, None, None, None         
+                
+            # 使用JavaScript获取相邻元素文本内容
             js_combined = '''
                 const container = arguments[0];
                 const result = { above_texts: [], below_texts: [] };
@@ -1229,1416 +1276,73 @@ class CryptoTrader:
                 return result;
             '''
             
-            # Execute the combined JavaScript
-            sibling_texts_result = self.driver.execute_script(js_combined, container)
-            above_element_texts = sibling_texts_result.get('above_texts', [])
-            below_element_texts = sibling_texts_result.get('below_texts', [])
-
-        except StaleElementReferenceException:
-            #self.logger.warning("获取兄弟节点文本时发生StaleElementReferenceException (可能由于container失效)")
-            return None, None, None, None
-        except Exception as e:
-            #self.logger.error(f"执行JavaScript获取兄弟节点文本失败: {str(e)}")
-            return None, None, None, None
-        
-        up_price_str = None
-        asks_shares_str = None
-        
-        if len(above_element_texts) >= 3: # Need at least 3 elements for a block
-            for i in range(len(above_element_texts) - 2): 
-                total_value_candidate = above_element_texts[i]
-                shares_candidate = above_element_texts[i+1]
-                price_candidate = above_element_texts[i+2]
-
-                # Check if the candidates form a valid price block
-                if '$' in total_value_candidate and '¢' in price_candidate:
-                    # Validate shares format
-                    cleaned_shares = shares_candidate.replace(',', '')
-                    if re.fullmatch(r'\d+\.?\d*', cleaned_shares) or re.fullmatch(r'\d+', cleaned_shares):
-                        # Validate price format
-                        price_match_obj = re.search(r'(\d+\.?\d*)¢', price_candidate)
-                        if price_match_obj:
-                            up_price_str = price_match_obj.group(1)
-                            asks_shares_str = cleaned_shares
-                            #self.logger.info(f"Found UP price (ask): {up_price_str} from '{price_candidate}', shares: {asks_shares_str} from '{shares_candidate}'")
-                            break
-        down_price_str = None
-        bids_shares_str = None
-        # For "down" (bids), the pattern is Price Cents, then Shares
-        if len(below_element_texts) >= 2: # Need at least 2 elements
-            for i in range(len(below_element_texts) - 1):
-                current_text = below_element_texts[i] 
-                next_text = below_element_texts[i+1] 
-                
-                if '¢' in current_text:
-                    price_match_obj = re.search(r'(\d+\.?\d*)¢', current_text)
-                    if price_match_obj:
-                        potential_shares_cleaned = next_text.replace(',', '')
-                        if re.fullmatch(r'\d+\.?\d*', potential_shares_cleaned) or re.fullmatch(r'\d+', potential_shares_cleaned):
-                            down_price_str = price_match_obj.group(1)
-                            # Use the cleaned shares value directly
-                            bids_shares_str = potential_shares_cleaned 
-                            #self.logger.info(f"Found DOWN price (bid): {down_price_str} from '{current_text}', shares: {bids_shares_str} from '{next_text}'")
-                            break 
-        try:  
-            if up_price_str is not None: # Check for None before float conversion
-                up_price_val = round(float(up_price_str), 2)
-            if asks_shares_str is not None:
-                asks_shares_val = float(asks_shares_str.replace(',', ''))
-            
-            if down_price_str is not None:
-                down_price_val = round(float(down_price_str), 2)
-            if bids_shares_str is not None:
-                bids_shares_val = float(bids_shares_str.replace(',', ''))
-            #self.logger.info(f"up_price_val: {up_price_val}, down_price_val: {down_price_val}, asks_shares_val: {asks_shares_val}, bids_shares_val: {bids_shares_val}")           
-            return up_price_val, down_price_val, asks_shares_val, bids_shares_val 
-             
-        except ValueError as e:
-            #self.logger.error(f"数值转换错误: {e}. Values: up_p='{up_price_str}', ask_s='{asks_shares_str}', down_p='{down_price_str}', bid_s='{bids_shares_str}'")
-            return None, None, None, None
-        except Exception as e: # Catch any other unexpected errors during conversion
-            #self.logger.error(f"解析价格和股数时发生未知错误: {str(e)}")
-            return None, None, None, None
-        
-    def check_prices(self):
-        """检查价格变化"""
-        # 直接检查driver是否存在，不存在就重启
-        if not self.driver and not self.is_restarting:
-            self.logger.warning("浏览器未初始化，尝试重启...")
-            if not self.restart_browser(force_restart=True):
-                self.logger.error("浏览器重启失败，跳过本次检查")
-                return
-
-        try:
-            # 获取一次价格和SHARES
-            up_price_val, down_price_val, asks_shares_val, bids_shares_val = self.get_nearby_cents()
-            
-            if up_price_val is not None and down_price_val is not None and asks_shares_val is not None and bids_shares_val is not None:
-                # 将原始的 '¢' 单位价格转换为 0-100 的百分比价格用于显示和逻辑判断
-                # asks_price (up_price) 是直接的 '¢' 值
-                # bids_price (down_price) 需要转换为 (100 - '¢') 值
-                
-                gui_up_price = float(up_price_val)  # 用于GUI显示的 up price (ask price)
-                gui_down_price = 100.0 - float(down_price_val) # 用于GUI显示的 down price (bid price, 100 - raw_bid)
-            
-                # 更新价格显示
-                self.yes_price_label.config(text=f"Up: {gui_up_price:.1f}¢")
-                self.no_price_label.config(text=f"Down: {gui_down_price:.1f}¢") # 使用转换后的 no_price
-                self.up_shares_label.config(text=f"Up Shares: {asks_shares_val:.1f}")
-                self.down_shares_label.config(text=f"Down Shares: {bids_shares_val:.1f}")
-                
-                # 执行所有交易检查函数
-                self.First_trade(up_price_val, down_price_val, asks_shares_val, bids_shares_val)
-                self.Second_trade(up_price_val, down_price_val, asks_shares_val, bids_shares_val)
-                self.Third_trade(up_price_val, down_price_val, asks_shares_val, bids_shares_val)
-                self.Forth_trade(up_price_val, down_price_val, asks_shares_val, bids_shares_val)
-                self.Sell_yes(up_price_val, down_price_val, asks_shares_val, bids_shares_val)
-                self.Sell_no(up_price_val, down_price_val, asks_shares_val, bids_shares_val)
-            else:
-                self.yes_price_label.config(text="Up: N/A")
-                self.no_price_label.config(text="Down: N/A")
-                self.up_shares_label.config(text="Up Shares: N/A")
-                self.down_shares_label.config(text="Down Shares: N/A")
-                
-        except Exception as e:
-            self.yes_price_label.config(text="Up: Fail")
-            self.no_price_label.config(text="Down: Fail")
-            self.up_shares_label.config(text="Up Shares: Fail")
-            self.down_shares_label.config(text="Down Shares: Fail")
-            time.sleep(1)
-            
-    def check_balance(self):
-        """获取Portfolio和Cash值"""
-        if not self.driver and not self.is_restarting:
-            self.restart_browser(force_restart=True)
-
-        # 等待页面完全加载
-        WebDriverWait(self.driver, 10).until(
-            lambda driver: driver.execute_script('return document.readyState') == 'complete'
-        )
-        
-        try:
-            # 取Portfolio值和Cash值
-            self.cash_value = None
-            self.portfolio_value = None
             try:
-                portfolio_element = self.driver.find_element(By.XPATH, XPathConfig.PORTFOLIO_VALUE[0])
-                cash_element = self.driver.find_element(By.XPATH, XPathConfig.CASH_VALUE[0])
-                self.cash_value = cash_element.text
-                self.portfolio_value = portfolio_element.text
-            except NoSuchElementException:
-                portfolio_element = self._find_element_with_retry(XPathConfig.PORTFOLIO_VALUE, timeout=3, silent=True)
-                cash_element = self._find_element_with_retry(XPathConfig.CASH_VALUE, timeout=3, silent=True)
-                self.cash_value = cash_element.text
-                self.portfolio_value = portfolio_element.text
-        
-            # 更新Portfolio和Cash显示
-            self.portfolio_label.config(text=f"Portfolio: {self.portfolio_value}")
-            self.cash_label.config(text=f"Cash: {self.cash_value}")
-
-        except Exception as e:
-            self.portfolio_label.config(text="Portfolio: Fail")
-            self.cash_label.config(text="Cash: Fail")
-             
-    """以上代码执行了监控价格和获取 CASH 的值。从这里开始程序返回到第 740 行"""  
-
-    """以下代码是设置 YES/NO 金额的函数,直到第 1127 行"""
-    def schedule_update_amount(self, retry_count=0):
-        """设置金额,带重试机制"""
-        try:
-            if retry_count < 15:  # 最多重试15次
-                # 1秒后执行
-                self.root.after(1000, lambda: self.try_update_amount(retry_count))
-            else:
-                self.logger.warning("更新金额操作达到最大重试次数")
-        except Exception as e:
-            self.logger.error(f"安排更新金额操作失败: {str(e)}")
-
-    def try_update_amount(self, current_retry=0):
-        """尝试设置金额"""
-        try:
-            self.set_amount_button.invoke()
-            self.root.after(1000, lambda: self.check_amount_and_set_price(current_retry))
-        except Exception as e:
-            self.logger.error(f"更新金额操作失败 (尝试 {current_retry + 1}/15): {str(e)}")
-            # 如果失败，安排下一次重试
-            self.schedule_update_amount(current_retry + 1)
-
-    def check_amount_and_set_price(self, current_retry):
-        """检查金额是否设置成功,成功后设置价格"""
-        try:
-            # 检查yes金额是否为非0值
-            yes1_amount = self.yes1_amount_entry.get().strip()
-
-            if yes1_amount and yes1_amount != '0':
-                # 延迟5秒设置价格
-                self.root.after(5000, lambda: self.set_yes1_no1_default_target_price())
-                
-            else:
-                if current_retry < 15:  # 最多重试15次
-                    self.logger.info("\033[31m❌ 金额未成功设置,2秒后重试\033[0m")
-                    self.root.after(2000, lambda: self.check_amount_and_set_price(current_retry))
-                else:
-                    self.logger.warning("金额设置超时")
-        except Exception as e:
-            self.logger.error(f"检查金额设置状态失败: {str(e)}")
-
-    def set_yes1_no1_default_target_price(self):
-        """设置默认目标价格"""
-        self.yes1_price_entry.delete(0, tk.END)
-        self.yes1_price_entry.insert(0, self.default_target_price)
-        self.no1_price_entry.delete(0, tk.END)
-        self.no1_price_entry.insert(0, self.default_target_price)
-        self.logger.info(f"\033[34m✅ 设置买入价格{self.default_target_price}成功\033[0m")
-        self.close_windows()
-
-    def set_yes_no_cash(self):
-        """设置 Yes/No 各级金额"""
-        try:
-            #设置重试参数
-            max_retry = 15
-            retry_count = 0
-            cash_value = 0
-
-            while retry_count < max_retry:
-                try:
-                    # 获取 Cash 值
-                    cash_value = float(self.zero_time_cash_value)
-                    break
-                except Exception as e:
-                    retry_count += 1
-                    if retry_count < max_retry:
-                        time.sleep(2)
-                    else:
-                        raise ValueError("获取Cash值失败")
-            if cash_value is None:
-                raise ValueError("获取Cash值失败")
-            
-            # 获取金额设置中的百分比值
-            initial_percent = float(self.initial_amount_entry.get()) / 100  # 初始金额百分比
-            first_rebound_percent = float(self.first_rebound_entry.get()) / 100  # 反水一次百分比
-            n_rebound_percent = float(self.n_rebound_entry.get()) / 100  # 反水N次百分比
-
-            # 设置 Yes1 和 No1金额
-            base_amount = cash_value * initial_percent
-            self.yes1_entry = self.yes_frame.grid_slaves(row=1, column=1)[0]
-            self.yes1_amount_entry.delete(0, tk.END)
-            self.yes1_amount_entry.insert(0, f"{base_amount:.2f}")
-            self.no1_entry = self.no_frame.grid_slaves(row=1, column=1)[0]
-            self.no1_amount_entry.delete(0, tk.END)
-            self.no1_amount_entry.insert(0, f"{base_amount:.2f}")
-            
-            # 计算并设置 Yes2/No2金额
-            self.yes2_amount = base_amount * first_rebound_percent
-            self.yes2_entry = self.yes_frame.grid_slaves(row=3, column=1)[0]
-            self.yes2_entry.delete(0, tk.END)
-            self.yes2_entry.insert(0, f"{self.yes2_amount:.2f}")
-            self.no2_entry = self.no_frame.grid_slaves(row=3, column=1)[0]
-            self.no2_entry.delete(0, tk.END)
-            self.no2_entry.insert(0, f"{self.yes2_amount:.2f}")
-            
-            # 计算并设置 YES3/NO3 金额
-            self.yes3_amount = self.yes2_amount * n_rebound_percent
-            self.yes3_entry = self.yes_frame.grid_slaves(row=5, column=1)[0]
-            self.yes3_entry.delete(0, tk.END)
-            self.yes3_entry.insert(0, f"{self.yes3_amount:.2f}")
-            self.no3_entry = self.no_frame.grid_slaves(row=5, column=1)[0]
-            self.no3_entry.delete(0, tk.END)
-            self.no3_entry.insert(0, f"{self.yes3_amount:.2f}")
-
-            # 计算并设置 Yes4/No4金额
-            self.yes4_amount = self.yes3_amount * n_rebound_percent
-            self.yes4_entry = self.yes_frame.grid_slaves(row=7, column=1)[0]
-            self.yes4_entry.delete(0, tk.END)
-            self.yes4_entry.insert(0, f"{self.yes4_amount:.2f}")
-            self.no4_entry = self.no_frame.grid_slaves(row=7, column=1)[0]
-            self.no4_entry.delete(0, tk.END)
-            self.no4_entry.insert(0, f"{self.yes4_amount:.2f}")
-
-            # 获取当前CASH并显示,此CASH再次点击start按钮时会更新
-            self.logger.info("\033[34m✅ YES/NO 金额设置完成\033[0m")
-            
-        except Exception as e:
-            self.logger.error(f"设置金额失败: {str(e)}")
-            
-            self.schedule_retry_update()
-
-    def schedule_retry_update(self):
-        """安排重试更新金额"""
-        if hasattr(self, 'retry_timer'):
-            self.root.after_cancel(self.retry_timer)
-        self.retry_timer = self.root.after(3000, self.set_yes_no_cash)  # 3秒后重试
-    """以上代码执行了设置 YES/NO 金额的函数,从 1000 行到 1127 行,程序执行返回到 745 行"""
-
-    """以下代码是启动 URL 监控和登录状态监控的函数,直到第 1426 行"""
-    def start_url_monitoring(self):
-        """启动URL监控"""
-        with self.url_monitoring_lock:
-            if getattr(self, 'is_url_monitoring', False):
-                self.logger.debug("URL监控已在运行中")
-                return
-            
-            if not self.driver and not self.is_restarting:
-                self.restart_browser(force_restart=True)
-
-            self.url_monitoring_running = True
-            self.logger.info("\033[34m✅ 启动URL监控\033[0m")
-
-            def check_url():
-                if self.running and self.driver:
-                    try:
-                        current_page_url = self.driver.current_url # 获取当前页面URL
-                        target_url = self.url_entry.get() # 获取输入框中的URL,这是最原始的URL
-
-                        if current_page_url != target_url:
-                            self.logger.warning("检测到URL变化,正在恢复")
-                            self.driver.get(target_url)
-                            self.logger.info(f"\033[34m✅ 已恢复到原始的监控网址: {target_url}\033[0m")
-
-                    except Exception as e:
-                        self.logger.error(f"URL监控出错: {str(e)}")
-                        # 重新导航到目标URL
-                        if self.driver:
-                            try:
-                                self.driver.get(target_url)
-                                self.logger.info(f"\033[34m✅ URL监控已自动修复: {target_url}\033[0m")
-                            except Exception:
-                                self.restart_browser(force_restart=True)
-                        else:
-                            self.restart_browser(force_restart=True)
-                    # 继续监控
-                    if self.running:
-                        self.url_check_timer = self.root.after(3000, check_url)  # 每3秒检查一次
-            
-            # 开始第一次检查
-            self.url_check_timer = self.root.after(1000, check_url)
-    def stop_url_monitoring(self):
-        """停止URL监控"""
-        with self.url_monitoring_lock:
-            # 检查是否有正在运行的URL监控
-            if not hasattr(self, 'url_monitoring_running') or not self.url_monitoring_running:
-                self.logger.debug("URL监控未在运行中,无需停止")
-                return
-            
-            # 取消定时器
-            if hasattr(self, 'url_check_timer') and self.url_check_timer:
-                try:
-                    self.root.after_cancel(self.url_check_timer)
-                    self.url_check_timer = None
-                    
-                except Exception as e:
-                    self.logger.error(f"取消URL监控定时器时出错: {str(e)}")
-            
-            # 重置监控状态
-            self.url_monitoring_running = False
-            self.logger.info("\033[31m❌ URL监控已停止\033[0m")
-
-    def find_login_button(self):
-        """查找登录按钮"""
-        login_button_element = None # 重命名以区分元素和文本
-        try:
-            login_button_element = self.driver.find_element(By.XPATH, XPathConfig.LOGIN_BUTTON[0])
-        except NoSuchElementException:
-            login_button_element = self._find_element_with_retry(
-                XPathConfig.LOGIN_BUTTON,
-                timeout=3,
-                silent=True
-            )
-        
-        if login_button_element:
-            try:
-                if login_button_element.text == "Log In":
-                    self.logger.info(f"\033[34m✅ 找到登录按钮，文本为 '{login_button_element.text}'\033[0m")
-                    return login_button_element # 返回 WebElement 对象
-                else:
-                    return None # 文本不匹配，返回 None
+                # 执行JavaScript获取结果
+                sibling_texts_result = self.driver.execute_script(js_combined, container)
+                above_element_texts = sibling_texts_result.get('above_texts', [])
+                below_element_texts = sibling_texts_result.get('below_texts', [])
             except StaleElementReferenceException:
-                self.logger.warning("获取登录按钮文本时发生 StaleElementReferenceException将重试查找。")
-                return None
-        else: 
-            return None # 未找到元素，返回 None
-    
-    def click_login_button(self):
-        """点击登录按钮""" 
-        login_button_element = self.find_login_button() # 现在返回元素或 None
-
-        if login_button_element: # 检查是否获取到了元素   
-            try:
-                login_button_element.click()
-                self.logger.info("\033[34m✅ 已点击 'Log In' 按钮\033[0m")
-
-                # 使用 XPath 定位并点击 google 按钮,可以考虑使用pyautogui点击登录按钮
-                google_button = None
-                try:
-                    google_button = self.driver.find_element(By.XPATH, XPathConfig.LOGIN_WITH_GOOGLE_BUTTON[0])
-                except NoSuchElementException:
-                    google_button = self._find_element_with_retry(
-                        XPathConfig.LOGIN_WITH_GOOGLE_BUTTON,
-                        timeout=3,
-                        silent=True
-                    )
-                if google_button:
-                    google_button.click()
-                    self.logger.info("\033[34m✅ 已点击 Google 登录按钮\033[0m")
-
-            except StaleElementReferenceException:
-                self.logger.warning("点击登录按钮时发生 StaleElementReferenceException,可能需要重新查找按钮或处理页面刷新。")
+                return None, None, None, None
             except Exception as e:
-                self.logger.info(f"❌ 点击登录按钮或 Google 按钮时出错")
-                self.click_login_button()
-        else:
-            self.logger.info("❌ 未找到 'Log In' 按钮或不符合点击条件，跳过点击。")
-
-    def start_login_monitoring(self):
-        """启动登录状态监控"""
-        self.logger.info("\033[34m✅ 启动登录状态监控\033[0m")
-        if not self.driver and not self.is_restarting:
-            self.restart_browser(force_restart=True)
+                self.logger.error(f"执行JavaScript获取兄弟节点文本失败: {str(e)}")
+                return None, None, None, None
             
-        def check_login_status():
-            if self.running and self.driver:
-                try:
-                    # 使用线程执行登录检查，避免阻塞主线程
-                    threading.Thread(
-                        target=self._check_login_status_thread, # 执行登录检查线程,此线程完全独立于主线程
-                        daemon=True
-                    ).start()
-                except Exception as e:
-                    self.logger.error(f"登录状态检查出错: {str(e)}")
-                
-                # 继续监控
-                if self.running:
-                    self.login_check_timer = self.root.after(15000, check_login_status)  # 每15秒检查一次
-        # 开始第一次检查
-        self.login_check_timer = self.root.after(10000, check_login_status)
+            # 解析上方元素文本(asks/up)
+            if len(above_element_texts) >= 3: # Need at least 3 elements for a block
+                for i in range(len(above_element_texts) - 2): 
+                    total_value_candidate = above_element_texts[i]
+                    shares_candidate = above_element_texts[i+1]
+                    price_candidate = above_element_texts[i+2]
 
-    def _check_login_status_thread(self):
-        """在单独线程中执行登录检查,只检查"""
-        try:
-            login_button_element_found = self.find_login_button()
-
-            if login_button_element_found:
-                try:
-                    self.logger.warning(f"❌ 检测到未登录状态, 执行登录操作")
-                    # 在新的辅助线程中执行登录操作
-                    login_thread = threading.Thread(target=self.check_and_handle_login, daemon=True)
-                    login_thread.start()
-
-                except Exception as e_thread_start:
-                    self.logger.error(f"启动登录线程失败: {e_thread_start}")
+                    # 检查是否构成有效价格块
+                    if '$' in total_value_candidate and '¢' in price_candidate:
+                        # 验证shares格式
+                        cleaned_shares = shares_candidate.replace(',', '')
+                        if re.fullmatch(r'\d+\.?\d*', cleaned_shares) or re.fullmatch(r'\d+', cleaned_shares):
+                            # 验证价格格式
+                            price_match_obj = re.search(r'(\d+\.?\d*)¢', price_candidate)
+                            if price_match_obj:
+                                up_price_str = price_match_obj.group(1)
+                                asks_shares_str = cleaned_shares
+                                break
                                 
-        except Exception as e:
-            self.logger.info(f"❌ _check_login_status_thread 中发生意外错误: {e}")
-
-    def check_and_handle_login(self):
-        """执行登录操作 - 此函数由 _check_login_status_thread 在获得锁后于新线程中启动"""
-        try:
-            self.stop_refresh_page()
-            self.stop_url_monitoring()
-
-            self.logger.info("开始执行登录操作 (在独立线程中)...")
-            if not self.driver and not self.is_restarting:
-                self.restart_browser(force_restart=True) 
-
-            self.login_running = True
-
-            self.click_login_button()
-
-            # 等待10秒,等待页面跳转
-            time.sleep(10)
+            # 解析下方元素文本(bids/down)
+            if len(below_element_texts) >= 2: # Need at least 2 elements
+                for i in range(len(below_element_texts) - 1):
+                    current_text = below_element_texts[i] 
+                    next_text = below_element_texts[i+1] 
+                    
+                    if '¢' in current_text:
+                        price_match_obj = re.search(r'(\d+\.?\d*)¢', current_text)
+                        if price_match_obj:
+                            potential_shares_cleaned = next_text.replace(',', '')
+                            if re.fullmatch(r'\d+\.?\d*', potential_shares_cleaned) or re.fullmatch(r'\d+', potential_shares_cleaned):
+                                down_price_str = price_match_obj.group(1)
+                                bids_shares_str = potential_shares_cleaned
+                                break
             
-            # 再次检查 "Log In" 按钮是否仍然存在
-            login_button_still_present = self.find_login_button()
-            
-            if login_button_still_present:
-                self.click_login_button()
-                time.sleep(10)
-            
-            def check_cash():
-                # 找 CASH的值, 验证是否登录成功,如果找到, 则登录成功
-                try:
-                    cash_value = None
-                    try:
-                        cash_value = self.driver.find_element(By.XPATH, XPathConfig.CASH_VALUE[0])
-                    except NoSuchElementException:
-                        cash_value = self._find_element_with_retry(
-                            XPathConfig.CASH_VALUE,
-                            timeout=3,
-                            silent=True
-                        )
-
-                    if cash_value:
-                        return cash_value
-                    else:
-                        return None
-
-                except Exception as e:
-                    self.logger.warning(f"❌ 检查 CASH 值失败")
-                    return None
-                
-            cash_value = check_cash()
-            if cash_value:
-                self.logger.info(f"✅ 找到\033[34mcash的值:{cash_value.text}\033[0m,登录成功")
-                # 在当前标签页打开 url 网址
-                url = self.url_entry.get()
-                self.driver.get(url)
-                time.sleep(2)
-
-                # 执行 CLICK_ACCEPT 按钮
-                self.click_accept()
-                
-                # 确保在主线程中调用 refresh_page
-                self.root.after(2000, self.start_url_monitoring)
-                self.root.after(20000, self.refresh_page)
-                self.logger.info(f"✅ \033[34m启动页面刷新\033[0m")
-                self.login_running = False
-
-        except Exception as e:
-            self.logger.info(f"❌ 登录流程 'check_and_handle_login' 发生错误: {e}")
-
-    def click_accept(self):
-        """点击ACCEPT按钮"""
-        self.logger.info("开始执行点击ACCEPT按钮")
-        #点击 AMOUNT 按钮,输入 1,然后点击 CONFIRM 按钮
-        self.amount_yes1_button.event_generate('<Button-1>')
-        time.sleep(0.5)
-        self.buy_confirm_button.invoke()
-        time.sleep(0.5)
-
-        try:
-            screen_width, screen_height = pyautogui.size()
-            target_x = 0
-            target_y = 0
-            if platform.system() == "Linux": # 分辨率 2560x1600
-                # Linux 系统下的特定坐标
-                target_x = screen_width - 520
-                target_y = 724    
-            else:
-                # 其他操作系统的默认坐标分辨率 1920x1080
-                target_x = screen_width - 520
-                target_y = 724
-                
-            # 移动鼠标到目标位置并点击
-            pyautogui.moveTo(target_x, target_y, duration=0.2) # 可选，平滑移动
-            pyautogui.click(target_x, target_y)
-            
-            self.logger.info("✅ 点击ACCEPT成功")
-            self.driver.refresh()
-
-        except Exception as e:
-            self.logger.error(f"执行 click_accept 点击操作失败: {str(e)}")
-
-    def refresh_page(self):
-        """定时刷新页面"""
-        # 生成随机的5-10分钟（以毫秒为单位）
-        random_minutes = random.uniform(2, 6)
-        self.refresh_interval = int(random_minutes * 60000)  # 转换为毫秒
-
-        with self.refresh_page_lock:
-            self.refresh_page_running = True
+            # 转换为数值类型
             try:
-                # 先取消可能存在的旧定时器
-                if hasattr(self, 'refresh_page_timer') and self.refresh_page_timer:
-                    try:
-                        self.root.after_cancel(self.refresh_page_timer)
-                        self.refresh_page_timer = None
-                    except Exception as e:
-                        self.logger.error(f"取消旧定时器失败: {str(e)}")
-
-                if self.running and self.driver and not self.trading:
-                    refresh_time = self.refresh_interval / 60000
-                    self.driver.refresh()
-                else:
-                    self.logger.info("刷新失败(else)")
-                    self.logger.info(f"trading={self.trading}")
-                    
-            except Exception as e:
-                self.logger.warning(f"页面刷新失败(except)")
-                # 无论是否执行刷新都安排下一次（确保循环持续）
-                if hasattr(self, 'refresh_page_timer') and self.refresh_page_timer:
-                    try:
-                        self.root.after_cancel(self.refresh_page_timer)
-                    except Exception as e:
-                        self.logger.error(f"取消旧定时器失败")
-            finally:
-                self.refresh_page_timer = self.root.after(self.refresh_interval, self.refresh_page)
-                #self.logger.info(f"\033[34m{round(refresh_time, 2)} 分钟后再次刷新\033[0m")
-
-    def stop_refresh_page(self):
-        """停止页面刷新"""
-        with self.refresh_page_lock:
-            
-            if hasattr(self, 'refresh_page_timer') and self.refresh_page_timer:
-                try:
-                    self.root.after_cancel(self.refresh_page_timer)
-                    self.refresh_page_timer = None
-                    self.logger.info("\033[31m❌ 刷新定时器已停止\033[0m")
-                except Exception as e:
-                    self.logger.error("取消页面刷新定时器时出错")
-            # 重置监控状态
-            self.refresh_page_running = False
-            self.logger.info("\033[31m❌ 刷新状态已停止\033[0m")
-    """以上代码执行了登录操作的函数,直到第 1315 行,程序执行返回到 748 行"""
-    def reset_trade(self):
-        """重置交易"""
-        # 在所有操作完成后,重置交易
-        time.sleep(1)
-        
-        # 检查属性是否存在，如果不存在则使用默认值
-        yes5_price = getattr(self, 'yes5_target_price', 0)
-        no5_price = getattr(self, 'no5_target_price', 0)
-
-        if (yes5_price > 90) or (no5_price > 90):
-            self.reset_trade_count = 0
-        else:
-            self.reset_trade_count += 1
-        
-        self.sell_count = 0
-        self.trade_count = 0
-
-        # 设置 YES5/NO5 价格为 0
-        self.yes5_price_entry.delete(0, tk.END)
-        self.yes5_price_entry.insert(0, "0")
-        self.yes5_price_entry.configure(foreground='black')
-        self.no5_price_entry.delete(0, tk.END)
-        self.no5_price_entry.insert(0, "0")
-        self.no5_price_entry.configure(foreground='black')
-        
-        # 重置Yes1和No1价格为默认值
-        self.set_yes1_no1_default_target_price()
-        # 重置交易次数
-        self.reset_count_label.config(text=str(self.reset_trade_count))
-        self.logger.info(f"第\033[32m{self.reset_trade_count}\033[0m次重置交易")
-    """以下代码是监控买卖条件及执行交易的函数,程序开始进入交易阶段,从 1468 行直到第 2224200 行"""  
-    def First_trade(self, asks_price_raw, bids_price_raw, asks_shares, bids_shares):
-        """第一次交易价格设置为 0.52 买入"""
-        try:
-            # 检查价格是否在合理范围内
-            if asks_price_raw is not None and asks_price_raw > 20 and bids_price_raw is not None and bids_price_raw < 97:
-                # 获取Yes1和No1的GUI界面上的价格
-                yes1_price = float(self.yes1_price_entry.get())
-                no1_price = float(self.no1_price_entry.get())
-                self.trading = True  # 开始交易
-               
-                # 检查Yes1价格匹配
-                if self._check_price_match(asks_price_raw, yes1_price, True, asks_shares, self.asks_shares):
-                    self.logger.info(f"Up 1: {asks_price_raw}¢ 价格匹配,执行自动交易")
-                    
-                    # 执行交易
-                    if self._execute_buy_trade(True, 1):
-                        # 交易成功，获取金额
-                        self.buy_yes1_amount = float(self.yes1_amount_entry.get())
-                        self.trade_count += 1
-                        
-                        # 重置Yes1和No1价格为0
-                        self._reset_price_entries(self.yes1_price_entry, self.no1_price_entry)
-                        
-                        # 设置No2价格为默认值
-                        self.no2_price_entry = self.no_frame.grid_slaves(row=2, column=1)[0]
-                        self._set_target_price(self.no2_price_entry, self.default_target_price)
-                        
-                        # 设置Yes5和No5价格为99
-                        self.yes5_price_entry = self.yes_frame.grid_slaves(row=8, column=1)[0]
-                        self.no5_price_entry = self.no_frame.grid_slaves(row=8, column=1)[0]
-                        self._batch_update_prices({
-                            self.yes5_price_entry: (self.default_normal_sell_price, 'red'),
-                            self.no5_price_entry: (self.default_normal_sell_price, 'red')
-                        })
-                        
-                        self.logger.info("\033[34m✅ First_trade执行成功\033[0m")
-                        
-                        # 发送交易邮件
-                        self.send_trade_email(
-                            trade_type="Buy Up1",
-                            price=self.buy_up_price,
-                            amount=self.buy_yes1_amount,
-                            trade_count=self.trade_count,
-                            cash_value=self.cash_value,
-                            portfolio_value=self.portfolio_value
-                        )
+                if up_price_str is not None: # Check for None before float conversion
+                    up_price_val = round(float(up_price_str), 2)
+                if asks_shares_str is not None:
+                    asks_shares_val = float(asks_shares_str.replace(',', ''))
                 
-                # 检查No1价格匹配
-                elif self._check_price_match(bids_price_raw, no1_price, False, bids_shares, self.bids_shares):
-                    self.logger.info(f"Down 1: {100.0 - bids_price_raw}¢ 价格匹配,执行自动交易")
+                if down_price_str is not None:
+                    down_price_val = round(float(down_price_str), 2)
+                if bids_shares_str is not None:
+                    bids_shares_val = float(bids_shares_str.replace(',', ''))
                     
-                    # 执行交易
-                    if self._execute_buy_trade(False, 1):
-                        # 交易成功，获取金额
-                        self.buy_no1_amount = float(self.no1_amount_entry.get())
-                        self.trade_count += 1
-                        
-                        # 重置Yes1和No1价格为0
-                        self._reset_price_entries(self.yes1_price_entry, self.no1_price_entry)
-                        
-                        # 设置Yes2价格为默认值
-                        self.yes2_price_entry = self.yes_frame.grid_slaves(row=2, column=1)[0]
-                        self._set_target_price(self.yes2_price_entry, self.default_target_price)
-                        
-                        # 设置Yes5和No5价格为0.98
-                        self.yes5_price_entry = self.yes_frame.grid_slaves(row=8, column=1)[0]
-                        self.no5_price_entry = self.no_frame.grid_slaves(row=8, column=1)[0]
-                        self._batch_update_prices({
-                            self.yes5_price_entry: (self.default_normal_sell_price, 'red'),
-                            self.no5_price_entry: (self.default_normal_sell_price, 'red')
-                        })
-                        
-                        self.logger.info("\033[34m✅ First_trade执行成功\033[0m")
-                       
-                        # 发送交易邮件
-                        self.send_trade_email(
-                            trade_type="Buy Down1",
-                            price=self.buy_down_price,
-                            amount=self.buy_no1_amount,
-                            trade_count=self.trade_count,
-                            cash_value=self.cash_value,
-                            portfolio_value=self.portfolio_value
-                        )
-                        
-        except ValueError as e:
-            self.logger.error(f"价格转换错误: {str(e)}")
-        except Exception as e:
-            self.logger.error(f"First_trade执行失败: {str(e)}")
-        finally:
-            self.trading = False
-            
-    def Second_trade(self, asks_price_raw, bids_price_raw, asks_shares, bids_shares):
-        """处理Yes2/No2的自动交易"""
-        try:
-            # 检查价格是否在合理范围内
-            if asks_price_raw is not None and asks_price_raw > 20 and bids_price_raw is not None and bids_price_raw < 97:
-                # 获取Yes2和No2的价格输入框
-                yes2_price = float(self.yes2_price_entry.get())
-                no2_price = float(self.no2_price_entry.get())
-                self.trading = True  # 开始交易
+                return up_price_val, down_price_val, asks_shares_val, bids_shares_val 
                 
-                # 检查Yes2价格匹配
-                if self._check_price_match(asks_price_raw, yes2_price, True, asks_shares, self.asks_shares):
-                    self.logger.info(f"Up 2: {asks_price_raw}¢ 价格匹配,执行自动交易")
-                    
-                    # 执行交易
-                    if self._execute_buy_trade(True, 2):
-                        # 交易成功，获取金额
-                        self.buy_yes2_amount = float(self.yes2_amount_entry.get())
-                        
-                        # 重置Yes2和No2价格为0
-                        self._reset_price_entries(self.yes2_price_entry, self.no2_price_entry)
-                        
-                        # 设置No3价格为默认值
-                        self.no3_price_entry = self.no_frame.grid_slaves(row=4, column=1)[0]
-                        self._set_target_price(self.no3_price_entry, self.default_target_price)
-                        
-                        # 增加交易次数
-                        self.trade_count += 1
-                        
-                        # 发送交易邮件
-                        self.send_trade_email(
-                            trade_type="Buy Up2",
-                            price=self.buy_up_price,
-                            amount=self.buy_yes2_amount,
-                            trade_count=self.trade_count,
-                            cash_value=self.cash_value,
-                            portfolio_value=self.portfolio_value
-                        )
-                        
-                        self.logger.info("\033[34m✅ Second_trade执行成功\033[0m")
-                        
-                # 检查No2价格匹配
-                elif self._check_price_match(bids_price_raw, no2_price, False, bids_shares, self.bids_shares):
-                    self.logger.info(f"Down 2: {100.0 - bids_price_raw}¢ 价格匹配,执行自动交易")
-                    
-                    # 执行交易
-                    if self._execute_buy_trade(False, 2):
-                        # 交易成功，获取金额
-                        self.buy_no2_amount = float(self.no2_amount_entry.get())
-                        
-                        # 重置Yes2和No2价格为0
-                        self._reset_price_entries(self.yes2_price_entry, self.no2_price_entry)
-                        
-                        # 设置Yes3价格为默认值
-                        self.yes3_price_entry = self.yes_frame.grid_slaves(row=4, column=1)[0]
-                        self._set_target_price(self.yes3_price_entry, self.default_target_price)
-                        
-                        # 增加交易次数
-                        self.trade_count += 1
-                        
-                        # 发送交易邮件
-                        self.send_trade_email(
-                            trade_type="Buy Down2",
-                            price=self.buy_down_price,
-                            amount=self.buy_no2_amount,
-                            trade_count=self.trade_count,
-                            cash_value=self.cash_value,
-                            portfolio_value=self.portfolio_value
-                        )
-                        
-                        self.logger.info("\033[34m✅ Second_trade执行成功\033[0m")
-                        
-        except ValueError as e:
-            self.logger.error(f"价格转换错误: {str(e)}")
-        except Exception as e:
-            self.logger.error(f"Second_trade执行失败: {str(e)}")
-        finally:
-            self.trading = False
-            
-    def Third_trade(self, asks_price_raw, bids_price_raw, asks_shares, bids_shares):
-        """处理Yes3/No3的自动交易"""
-        try:
-            # 检查价格是否在合理范围内
-            if asks_price_raw is not None and asks_price_raw > 20 and bids_price_raw is not None and bids_price_raw < 97:                
-                # 获取Yes3和No3的价格输入框
-                yes3_price = float(self.yes3_price_entry.get())
-                no3_price = float(self.no3_price_entry.get())
-                self.trading = True  # 开始交易
-            
-                # 检查Yes3价格匹配
-                if self._check_price_match(asks_price_raw, yes3_price, True, asks_shares, self.asks_shares):
-                    self.logger.info(f"Up 3: {asks_price_raw}¢ 价格匹配,执行自动交易")
-                    
-                    # 执行交易
-                    if self._execute_buy_trade(True, 3):
-                        # 交易成功，获取金额
-                        self.buy_yes3_amount = float(self.yes3_amount_entry.get())
-                        
-                        # 重置Yes3和No3价格为0
-                        self._reset_price_entries(self.yes3_price_entry, self.no3_price_entry)
-                        
-                        # 设置No4价格为默认值
-                        self.no4_price_entry = self.no_frame.grid_slaves(row=6, column=1)[0]
-                        self._set_target_price(self.no4_price_entry, self.default_target_price)
-
-                        # 增加交易次数
-                        self.trade_count += 1
-                        
-                        # 发送交易邮件
-                        self.send_trade_email(
-                            trade_type="Buy Up3",
-                            price=self.buy_up_price,
-                            amount=self.buy_yes3_amount,
-                            trade_count=self.trade_count,
-                            cash_value=self.cash_value,
-                            portfolio_value=self.portfolio_value
-                        )   
-                        
-                        self.logger.info("\033[34m✅ Third_trade执行成功\033[0m")
-                        
-                # 检查No3价格匹配
-                elif self._check_price_match(bids_price_raw, no3_price, False, bids_shares, self.bids_shares):
-                    self.logger.info(f"Down 3: {100.0 - bids_price_raw}¢ 价格匹配,执行自动交易")
-                    
-                    # 执行交易
-                    if self._execute_buy_trade(False, 3):
-                        # 交易成功，获取金额
-                        self.buy_no3_amount = float(self.no3_amount_entry.get())
-                        
-                        # 重置Yes3和No3价格为0
-                        self._reset_price_entries(self.yes3_price_entry, self.no3_price_entry)
-                        
-                        # 设置Yes4价格为默认值
-                        self.yes4_price_entry = self.yes_frame.grid_slaves(row=6, column=1)[0]
-                        self._set_target_price(self.yes4_price_entry, self.default_target_price)
-                        
-                        # 增加交易次数
-                        self.trade_count += 1
-                        
-                        # 发送交易邮件
-                        self.send_trade_email(
-                            trade_type="Buy Down3",
-                            price=self.buy_down_price,
-                            amount=self.buy_no3_amount,
-                            trade_count=self.trade_count,
-                            cash_value=self.cash_value,
-                            portfolio_value=self.portfolio_value
-                        )
-                        
-                        self.logger.info("\033[34m✅ Third_trade执行成功\033[0m")
-                        
-        except ValueError as e:
-            self.logger.error(f"价格转换错误: {str(e)}")
-        except Exception as e:
-            self.logger.error(f"Third_trade执行失败: {str(e)}")    
-        finally:
-            self.trading = False
-            
-    def Forth_trade(self, asks_price_raw, bids_price_raw, asks_shares, bids_shares):
-        """处理Yes4/No4的自动交易"""
-        try:
-            # 检查价格是否在合理范围内
-            if asks_price_raw is not None and asks_price_raw > 20 and bids_price_raw is not None and bids_price_raw < 97:  
-                # 获取Yes4和No4的价格输入框
-                yes4_price = float(self.yes4_price_entry.get())
-                no4_price = float(self.no4_price_entry.get())
-                self.trading = True  # 开始交易
-            
-                # 检查Yes4价格匹配
-                if self._check_price_match(asks_price_raw, yes4_price, True, asks_shares, self.asks_shares):
-                    self.logger.info(f"Up 4: {asks_price_raw}¢ 价格匹配,执行自动交易")
-                    
-                    # 执行交易
-                    if self._execute_buy_trade(True, 4):
-                        # 交易成功，获取金额
-                        self.buy_yes4_amount = float(self.yes4_amount_entry.get())
-                        
-                        # 重置Yes4和No4价格为0
-                        self._reset_price_entries(self.yes4_price_entry, self.no4_price_entry)
-                        
-                        # 设置Yes5和No5价格为特殊值（为防止第5次反水）
-                        self.yes5_price_entry = self.yes_frame.grid_slaves(row=8, column=1)[0]
-                        self.no5_price_entry = self.no_frame.grid_slaves(row=8, column=1)[0]
-                        self._batch_update_prices({
-                            self.yes5_price_entry: (self.default_sell_price_backwater, 'red'),
-                            self.no5_price_entry: (self.default_sell_price, 'red')
-                        })
-
-                        # 增加交易次数
-                        self.trade_count += 1
-                        
-                        # 发送交易邮件
-                        self.send_trade_email(
-                            trade_type="Buy Up4",
-                            price=self.buy_up_price,
-                            amount=self.buy_yes4_amount,
-                            trade_count=self.trade_count,
-                            cash_value=self.cash_value,
-                            portfolio_value=self.portfolio_value
-                        )
-                        
-                        self.logger.info("\033[34m✅ Forth_trade执行成功\033[0m")
-                        
-                # 检查No4价格匹配
-                elif self._check_price_match(bids_price_raw, no4_price, False, bids_shares, self.bids_shares):
-                    self.logger.info(f"Down 4: {100.0 - bids_price_raw}¢ 价格匹配,执行自动交易")
-                    
-                    # 执行交易
-                    if self._execute_buy_trade(False, 4):
-                        # 交易成功，获取金额
-                        self.buy_no4_amount = float(self.no4_amount_entry.get())
-                        
-                        # 重置Yes4和No4价格为0
-                        self._reset_price_entries(self.yes4_price_entry, self.no4_price_entry)
-                        
-                        # 设置Yes5和No5价格为特殊值（为防止第5次反水）
-                        self.yes5_price_entry = self.yes_frame.grid_slaves(row=8, column=1)[0]
-                        self.no5_price_entry = self.no_frame.grid_slaves(row=8, column=1)[0]
-                        self._batch_update_prices({
-                            self.yes5_price_entry: (self.default_sell_price, 'red'),
-                            self.no5_price_entry: (self.default_sell_price_backwater, 'red')
-                        })
-
-                        # 增加交易次数
-                        self.trade_count += 1
-                        
-                        # 发送交易邮件
-                        self.send_trade_email(
-                            trade_type="Buy Down4",
-                            price=self.buy_down_price,
-                            amount=self.buy_no4_amount,
-                            trade_count=self.trade_count,
-                            cash_value=self.cash_value,
-                            portfolio_value=self.portfolio_value
-                        )
-                        
-                        self.logger.info("\033[34m✅ Forth_trade执行成功\033[0m")
-                        
-        except ValueError as e:
-            self.logger.error(f"价格转换错误: {str(e)}")
-        except Exception as e:
-            self.logger.error(f"Forth_trade执行失败: {str(e)}")  
-        finally:
-            self.trading = False
-            
-    def Sell_yes(self, asks_price_raw, bids_price_raw, asks_shares, bids_shares):
-        """当YES5价格等于实时Yes价格时自动卖出"""
-        try:
-            if not self.driver and not self.is_restarting:
-                self.restart_browser(force_restart=True)
-              
-            if asks_price_raw is not None and bids_price_raw is not None and (bids_price_raw > 10):
-                # 获取Yes5价格
-                yes5_price = float(self.yes5_price_entry.get())
-                self.trading = True  # 开始交易
-                price_diff = round(bids_price_raw - yes5_price, 2) # 47-47=0;;46-47=-1;
-
-                # 检查Yes5价格匹配 - 反水卖出策略
-                if (44 <= yes5_price <= 47) and (-2 <= price_diff <= 1) and (bids_shares > self.bids_shares):
-                    self.logger.info(f"Up 5: {bids_price_raw}¢ 价格匹配,执行自动卖出")
-                    
-                    self.yes5_target_price = yes5_price
-                    
-                    # 先卖 Up
-                    self.only_sell_yes()
-                    self.logger.info(f"卖完 Up 后，再卖 Down 3 SHARES")
-                    
-                    # 再卖 Down3
-                    self.only_sell_no3()
-
-                    # 设置 YES5/NO5 价格为 99
-                    self._batch_update_prices({
-                        self.yes5_price_entry: (self.default_normal_sell_price, 'red'),
-                        self.no5_price_entry: (self.default_normal_sell_price, 'red')
-                    })
-
-                    # 重置交易次数
-                    self.reset_trade_count += 1
-                    self.reset_count_label.config(text=str(self.reset_trade_count))
-                    self.sell_count = 0
-                    self.trade_count = 0
-
-                    # 重置YES2 价格为默认值
-                    self.yes2_price_entry = self.yes_frame.grid_slaves(row=2, column=1)[0]
-                    self._set_target_price(self.yes2_price_entry, self.default_target_price, 'black')
-                
-                # 检查Yes5价格匹配 - 正常卖出策略
-                elif yes5_price >= 60 and 0 <= price_diff <= 1.1 and (bids_shares > self.bids_shares):
-                    self.logger.info(f"Up 5: {asks_price_raw}¢ 价格匹配,执行自动卖出")
-                    
-                    self.yes5_target_price = yes5_price
-                    
-                    # 执行卖出YES操作
-                    self.only_sell_yes()
-                    
-                    time.sleep(1)
-                    self.driver.refresh()
-
-                    self.logger.info("卖完 Up 后，再卖 Down")
-                    # 卖 Down 之前先检查是否有 Down 标签
-                    if self.find_position_label_no():
-                        self.only_sell_no()
-                    
-                    # 重置所有价格
-                    for i in range(1,5):  # 1-4
-                        yes_entry = getattr(self, f'yes{i}_price_entry', None)
-                        no_entry = getattr(self, f'no{i}_price_entry', None)
-                        if yes_entry and no_entry:
-                            self._reset_price_entries(yes_entry, no_entry)
-                    
-                    # 在所有操作完成后,重置交易
-                    self.root.after(0, self.reset_trade)
-                    
-        except Exception as e:
-            self.logger.error(f"❌ Sell_yes执行失败: {str(e)}")
-            
-        finally:
-            self.trading = False
-            
-    def Sell_no(self, asks_price_raw, bids_price_raw, asks_shares, bids_shares):
-        """当NO5价格等于实时No价格时自动卖出"""
-        try:
-            if not self.driver and not self.is_restarting:
-                self.restart_browser(force_restart=True)
-            
-            if asks_price_raw is not None and (0 < asks_price_raw < 90) and bids_price_raw is not None:
-                # 获取No5价格
-                no5_price = float(self.no5_price_entry.get())
-                self.trading = True  # 开始交易
-                price_diff = round(100 - asks_price_raw - no5_price, 2)
-            
-                # 检查No5价格匹配 - 反水卖出策略
-                if (40 <= no5_price <= 47) and (-2 <= price_diff <= 1) and (bids_shares > self.bids_shares):
-                    self.logger.info(f"Down 5: {100 - asks_price_raw}¢ 价格匹配,执行自动卖出")
-
-                    # 先卖全部 Down
-                    self.only_sell_no()
-                    self.logger.info(f"卖完 Down 后，再卖 Up3 SHARES")
-                    
-                    # 再卖 Up3
-                    self.only_sell_yes3()
-
-                    # 设置 YES5/NO5 价格为 99
-                    self._batch_update_prices({
-                        self.yes5_price_entry: (self.default_normal_sell_price, 'red'),
-                        self.no5_price_entry: (self.default_normal_sell_price, 'red')
-                    })
-
-                    # 重置交易
-                    self.reset_trade_count += 1
-                    self.reset_count_label.config(text=str(self.reset_trade_count))
-                    self.logger.info(f"重置交易次数: {self.reset_trade_count}")
-                    
-                    self.sell_count = 0
-                    self.trade_count = 0
-
-                    # 重置NO2 价格为默认值
-                    self.no2_price_entry = self.no_frame.grid_slaves(row=2, column=1)[0]
-                    self._set_target_price(self.no2_price_entry, self.default_target_price, 'black')
-                
-                # 检查No5价格匹配 - 正常卖出策略
-                elif no5_price >= 60 and (0 <= price_diff <= 1.1) and (bids_shares > self.bids_shares):
-                    self.logger.info(f"Down 5: {100 - asks_price_raw}¢ 价格匹配,执行自动卖出")
-
-                    self.no5_target_price = no5_price
-                    
-                    # 卖完 Down 后，自动再卖 Up                      
-                    self.only_sell_no()
-                    self.logger.info("卖完 Down 后，再卖 Up")
-                    time.sleep(2)
-                    self.driver.refresh()
-                    
-                    if self.find_position_label_yes():
-                        self.only_sell_yes()
-
-                    # 重置所有价格
-                    for i in range(1,5):  # 1-4
-                        yes_entry = getattr(self, f'yes{i}_price_entry', None)
-                        no_entry = getattr(self, f'no{i}_price_entry', None)
-                        if yes_entry and no_entry:
-                            self._reset_price_entries(yes_entry, no_entry)
-                            
-                    # 在所有操作完成后,重置交易
-                    self.root.after(0, self.reset_trade)
+            except ValueError as e:
+                self.logger.error(f"数值转换错误: {e}")
+                return None, None, None, None
                 
         except Exception as e:
-            self.logger.error(f"❌ Sell_no执行失败: {str(e)}")
-            
-        finally:
-            self.trading = False
-
-    def only_sell_yes(self):
-        """只卖出YES"""
-        self.logger.info("执行only_sell_yes")
-
-        # 调用卖出按钮
-        self.position_sell_yes_button.invoke()
-        time.sleep(0.5)  # 必要的延迟，确保按钮点击生效
-        self.sell_confirm_button.invoke()
-        
-        # 等待交易完成
-        time.sleep(2)
-        
-        # 验证交易
-        if self._verify_trade('Sold', 'Up')[0]:
-            # 增加卖出计数
-            self.sell_count += 1
-            
-            # 发送交易邮件 - 卖出YES
-            self.send_trade_email(
-                trade_type="Sell Up",
-                price=self.sell_up_price,
-                amount=self.position_yes_cash(),  # 卖出时金额为总持仓
-                trade_count=self.sell_count,
-                cash_value=self.cash_value,
-                portfolio_value=self.portfolio_value
-            )
-        else:
-            self.logger.warning("❌ 卖出only_sell_yes验证失败,重试")
-            self.only_sell_yes()        
-       
-    def only_sell_no(self):
-        """只卖出Down"""
-        self.logger.info("执行only_sell_no")
-        
-        # 调用卖出按钮
-        self.position_sell_no_button.invoke()
-        time.sleep(0.5)  # 必要的延迟，确保按钮点击生效
-        self.sell_confirm_button.invoke()
-        
-        # 等待交易完成
-        time.sleep(2)
-        
-        # 验证交易
-        if self._verify_trade('Sold', 'Down')[0]:
-            # 增加卖出计数
-            self.sell_count += 1
-            
-            # 发送交易邮件 - 卖出NO
-            self.send_trade_email(
-                trade_type="Sell Down",
-                price=self.sell_down_price,
-                amount=self.position_no_cash(),  # 卖出时金额为总持仓
-                trade_count=self.sell_count,
-                cash_value=self.cash_value,
-                portfolio_value=self.portfolio_value
-            )
-        else:
-            self.logger.warning("❌ 卖出only_sell_no验证失败,重试")
-            self.only_sell_no()
-
-    def only_sell_yes3(self):
-        """只卖出YES3对应的shares数量"""
-        try:
-            self.logger.info("执行only_sell_yes3")
-            
-            # 计算要卖出的shares数量
-            yes3_shares = self.buy_yes3_amount / (self.default_target_price / 100)
-            
-            # 点击卖出按钮
-            self.position_sell_yes_button.invoke()
-            time.sleep(0.5)  # 必要的延迟，确保按钮点击生效
-
-            # 找到shares输入框并设置数量
-            shares_input = self._get_cached_element('AMOUNT_INPUT', refresh=True)
-            if not shares_input:
-                self.logger.error("❌ 未找到shares输入框")
-                return
-                
-            # 清除输入框并设置shares数量
-            shares_input.clear()
-            time.sleep(0.5)  # 必要的延迟，确保清除操作完成
-            shares_input.send_keys(str(yes3_shares))
-            time.sleep(0.5)  # 必要的延迟，确保输入操作完成
-            
-            # 点击确认按钮
-            self.sell_confirm_button.invoke()
-            
-            # 等待交易完成
-            time.sleep(2)
-            
-            # 验证交易
-            if self._verify_trade('Sold', 'Up')[0]:
-                self.logger.info(f"卖 Up 3 SHARES 成功")
-                
-                # 增加卖出计数
-                self.sell_count += 1
-                
-                # 发送交易邮件 - 卖出YES
-                self.send_trade_email(
-                    trade_type="Sell Up",
-                    price=self.sell_up_price,
-                    amount=self.position_yes_cash(),  # 卖出时金额为总持仓
-                    trade_count=self.sell_count,
-                    cash_value=self.cash_value,
-                    portfolio_value=self.portfolio_value
-                )
-                
-                self.logger.info(f"卖出 Up 3 SHARES: {yes3_shares} 成功")
-                
-        except Exception as e:
-            self.logger.error(f"❌ only_sell_yes3执行失败: {str(e)}")
-            self.only_sell_yes3()
-            
-    def only_sell_no3(self):
-        """只卖出NO3对应的shares数量"""
-        try:
-            self.logger.info("执行only_sell_no3")
-            
-            # 计算要卖出的shares数量
-            no3_shares = self.buy_no3_amount / (self.default_target_price / 100)
-            
-            # 点击卖出按钮
-            self.position_sell_no_button.invoke()
-            time.sleep(0.5)  # 必要的延迟，确保按钮点击生效
-            
-            # 找到shares输入框并设置数量
-            shares_input = self._get_cached_element('AMOUNT_INPUT', refresh=True)
-            if not shares_input:
-                self.logger.error("❌ 未找到shares输入框")
-                return
-                
-            # 清除输入框并设置shares数量
-            shares_input.clear()
-            time.sleep(0.5)  # 必要的延迟，确保清除操作完成
-            shares_input.send_keys(str(no3_shares))
-            time.sleep(0.5)  # 必要的延迟，确保输入操作完成
-            
-            # 点击确认按钮
-            self.sell_confirm_button.invoke()
-            
-            # 等待交易完成
-            time.sleep(2)
-            
-            # 验证交易
-            if self._verify_trade('Sold', 'Down')[0]:
-                self.logger.info(f"卖 Down 3 SHARES 成功")
-                
-                # 增加卖出计数
-                self.sell_count += 1
-                
-                # 发送交易邮件 - 卖出NO
-                self.send_trade_email(
-                    trade_type="Sell Down",
-                    price=self.sell_down_price,
-                    amount=self.position_no_cash(),  # 卖出时金额为总持仓
-                    trade_count=self.sell_count,
-                    cash_value=self.cash_value,
-                    portfolio_value=self.portfolio_value
-                )
-                
-                self.logger.info(f"卖出 Down 3 SHARES: {no3_shares} 成功")
-                
-        except Exception as e:
-            self.logger.error(f"❌ only_sell_no3执行失败: {str(e)}")
-            self.only_sell_no3()
-            
-    def Verify_buy_yes(self):
-        """
-        验证买入YES交易是否成功完成
-        
-        Returns:
-            bool: 交易是否成功
-        """
-        return self._verify_trade('Bought', 'Up')[0]
-        
-    def Verify_buy_no(self):
-        """
-        验证买入NO交易是否成功完成
-        
-        Returns:
-            bool: 交易是否成功
-        """
-        return self._verify_trade('Bought', 'Down')[0]
+            self.logger.error(f"解析价格和股数时发生未知错误: {str(e)}")
+            return None, None, None, None
     
-    def Verify_sold_yes(self):
-        """
-        验证卖出YES交易是否成功完成
-        
-        Returns:
-            bool: 交易是否成功
-        """
-        return self._verify_trade('Sold', 'Up')[0]
-        
-    def Verify_sold_no(self):
-        """
-        验证卖出NO交易是否成功完成
-        
-        Returns:
-            bool: 交易是否成功
-        """
-        return self._verify_trade('Sold', 'Down')[0]
-            
-    def _verify_trade(self, action_type, direction_type):
-        """统一的交易验证函数
-        Args:
-            action_type: 交易类型 ('Bought' 或 'Sold')
-            direction_type: 方向类型 ('Up' 或 'Down')  
-        Returns:
-            bool: 交易是否成功
-            float: 交易金额
-        """
-        try:
-            # 首先验证浏览器状态
-            if not self.driver and not self.is_restarting:
-                self.restart_browser(force_restart=True)
-            
-            # 等待交易记录出现在历史页面上（交易成功后需要2-3秒）
-            time.sleep(3)
-            
-            # 等待并获取历史元素
-            history_element = self._get_cached_element('HISTORY', refresh=True)
-            if not history_element:
-                return False, 0
-                
-            text = history_element.text
-            
-            # 正则匹配
-            action_match = re.search(rf'\b({action_type})\b', text)
-            direction_match = re.search(rf'\b({direction_type})\b', text)
-            amount_match = re.search(r'\$(\d+\.?\d*)', text)
-            price_match = re.search(r'(\d+)¢', text)
-            
-            # 检查匹配结果
-            if not all([action_match, direction_match, amount_match, price_match]):
-                self.logger.warning(f"正则匹配失败,text内容: {text}")
-                return False, 0
-                
-            # 验证交易类型和方向
-            if action_match.group(1) == action_type and direction_match.group(1) == direction_type:
-                # 提取金额和价格
-                amount = float(amount_match.group(1))
-                price = float(price_match.group(1))
-                
-                # 根据交易类型和方向设置相应的属性
-                if action_type == 'Bought':
-                    if direction_type == 'Up':
-                        self.trade_type = 'Bought'
-                        self.buy_yes_value = 'Up'
-                        self.buy_yes_amount = amount
-                        self.buy_up_price = price
-                    else:  # Down
-                        self.trade_type = 'Bought'
-                        self.buy_no_value = 'Down'
-                        self.buy_no_amount = amount
-                        self.buy_down_price = price
-                else:  # Sold
-                    if direction_type == 'Up':
-                        self.trade_type = 'Sold'
-                        self.buy_yes_value = 'Up'
-                        self.sell_yes_amount = amount
-                        self.sell_up_price = price
-                    else:  # Down
-                        self.trade_type = 'Sold'
-                        self.buy_no_value = 'Down'
-                        self.sell_no_amount = amount
-                        self.sell_down_price = price
-                
-                self.logger.info(f"交易验证成功: {action_type}-{direction_type}-${amount}")
-                return True, amount
-            return False, 0
-            
-        except Exception as e:
-            self.logger.warning(f"❌ 验证交易失败: {str(e)}")
-            return False, 0
-        finally:
-            self.driver.refresh()
-
-    # 添加辅助函数，用于优化交易操作
-    def _get_cached_element(self, xpath_key, refresh=False):
-        """获取DOM元素,优先从缓存获取
-        Args:
-            xpath_key: XPathConfig中的键名或XPath列表
-            refresh: 是否强制刷新缓存         
-        Returns:
-            WebElement: 找到的DOM元素
-        """
-        # 如果传入的是XPath列表，直接使用
-        if isinstance(xpath_key, list):
-            xpath_list = xpath_key
-            cache_key = xpath_list[0]  # 使用第一个XPath作为缓存键
-        else:
-            # 否则从XPathConfig获取XPath列表
-            xpath_list = getattr(XPathConfig, xpath_key)
-            cache_key = xpath_key
-            
-        # 初始化缓存字典（如果不存在）
-        if not hasattr(self, 'element_cache'):
-            self.element_cache = {}
-            
-        # 如果需要刷新缓存或元素不在缓存中
-        if refresh or cache_key not in self.element_cache:
-            element = self._find_element_with_retry(xpath_list, timeout=3, silent=True)
-            if element:
-                self.element_cache[cache_key] = element
-                
-        return self.element_cache.get(cache_key)
-        
     def _wait_for_element(self, xpath_list, timeout=10, poll_frequency=0.5):
         """智能等待元素出现
         
@@ -2695,7 +1399,7 @@ class CryptoTrader:
             # NO方向：实时价格应该接近或等于目标价格
             price_diff = abs(real_price - target_price)
             return price_diff <= self.price_premium and real_price <= target_price
-            
+    
     def _reset_price_entries(self, yes_entry, no_entry):
         """重置价格输入框
         
@@ -3025,7 +1729,7 @@ class CryptoTrader:
             )
         text = yes_element.text
         amount_match = re.search(r'\$(\d+\.?\d*)', text)  # 匹配 $数字 格式
-        yes_value = float(amount_match.group(1))
+        yes_value = float(amount_match.group(1)) if amount_match else 0
         self.logger.info(f"当前持仓YES的金额: {yes_value}")
         return yes_value
     
@@ -3041,7 +1745,7 @@ class CryptoTrader:
             )
         text = no_element.text
         amount_match = re.search(r'\$(\d+\.?\d*)', text)  # 匹配 $数字 格式
-        no_value = float(amount_match.group(1))
+        no_value = float(amount_match.group(1)) if amount_match else 0
         self.logger.info(f"当前持仓NO的金额: {no_value}")
         return no_value
 
@@ -3051,7 +1755,6 @@ class CryptoTrader:
         all_handles = self.driver.window_handles
         
         if len(all_handles) > 1:
-            #self.logger.info(f"当前窗口数: {len(all_handles)}，准备关闭多余窗口")
             # 保留最后一个窗口，关闭其他所有窗口
             current_handle = all_handles[-1]  # 使用最后一个窗口
             
@@ -3065,6 +1768,37 @@ class CryptoTrader:
             
         else:
             self.logger.warning("❗ 当前窗口数不足2个,无需切换")
+            
+    def reset_trade(self):
+        """重置交易"""
+        # 在所有操作完成后,重置交易
+        time.sleep(1)
+        
+        # 检查属性是否存在，如果不存在则使用默认值
+        yes5_price = getattr(self, 'yes5_target_price', 0)
+        no5_price = getattr(self, 'no5_target_price', 0)
+
+        if (yes5_price > 90) or (no5_price > 90):
+            self.reset_trade_count = 0
+        else:
+            self.reset_trade_count += 1
+        
+        self.sell_count = 0
+        self.trade_count = 0
+
+        # 设置 YES5/NO5 价格为 0
+        self.yes5_price_entry.delete(0, tk.END)
+        self.yes5_price_entry.insert(0, "0")
+        self.yes5_price_entry.configure(foreground='black')
+        self.no5_price_entry.delete(0, tk.END)
+        self.no5_price_entry.insert(0, "0")
+        self.no5_price_entry.configure(foreground='black')
+        
+        # 重置Yes1和No1价格为默认值
+        self.set_yes1_no1_default_target_price()
+        # 重置交易次数
+        self.reset_count_label.config(text=str(self.reset_trade_count))
+        self.logger.info(f"第\033[32m{self.reset_trade_count}\033[0m次重置交易")
 
     def set_default_price(self, price):
         """设置默认目标价格"""
@@ -3878,20 +2612,1130 @@ class CryptoTrader:
                 self.comparison_binance_price_timer.start()
                 self.logger.info(f"\033[34m{round(seconds_until_next_run / 3600,2)}\033[0m小时后比较\033[34m{self.selected_coin}USDT\033[0m币安价格")
 
+    def First_trade(self, asks_price_raw, bids_price_raw, asks_shares, bids_shares):
+        """第一次交易价格设置为 0.52 买入"""
+        try:
+            # 检查价格是否在合理范围内
+            if asks_price_raw is None or asks_price_raw <= 20 or bids_price_raw is None or bids_price_raw >= 97:
+                return
+                
+            # 获取Yes1和No1的GUI界面上的价格
+            yes1_price = float(self.yes1_price_entry.get())
+            no1_price = float(self.no1_price_entry.get())
+            self.trading = True  # 开始交易
+           
+            # 检查Yes1价格匹配
+            if self._check_price_match(asks_price_raw, yes1_price, True, asks_shares, self.asks_shares):
+                self.logger.info(f"Up 1: {asks_price_raw}¢ 价格匹配,执行自动交易")
+                
+                # 执行交易
+                if self._execute_buy_trade(True, 1):
+                    # 交易成功，获取金额
+                    self.buy_yes1_amount = float(self.yes1_amount_entry.get())
+                    self.trade_count += 1
+                    
+                    # 重置Yes1和No1价格为0
+                    self._reset_price_entries(self.yes1_price_entry, self.no1_price_entry)
+                    
+                    # 设置No2价格为默认值
+                    self.no2_price_entry = self.no_frame.grid_slaves(row=2, column=1)[0]
+                    self._set_target_price(self.no2_price_entry, self.default_target_price)
+                    
+                    # 设置Yes5和No5价格为99（为确保可以正常卖出）
+                    self.yes5_price_entry = self.yes_frame.grid_slaves(row=8, column=1)[0]
+                    self.no5_price_entry = self.no_frame.grid_slaves(row=8, column=1)[0]
+                    self._batch_update_prices({
+                        self.yes5_price_entry: (self.default_normal_sell_price, 'red'),
+                        self.no5_price_entry: (self.default_normal_sell_price, 'red')
+                    })
+                    
+                    self.logger.info("\033[34m✅ First_trade执行成功\033[0m")
+                    
+                    # 发送交易邮件
+                    self.send_trade_email(
+                        trade_type="Buy Up1",
+                        price=self.buy_up_price,
+                        amount=self.buy_yes1_amount,
+                        trade_count=self.trade_count,
+                        cash_value=self.cash_value,
+                        portfolio_value=self.portfolio_value
+                    )
+            
+            # 检查No1价格匹配
+            elif self._check_price_match(bids_price_raw, no1_price, False, bids_shares, self.bids_shares):
+                self.logger.info(f"Down 1: {100.0 - bids_price_raw}¢ 价格匹配,执行自动交易")
+                
+                # 执行交易
+                if self._execute_buy_trade(False, 1):
+                    # 交易成功，获取金额
+                    self.buy_no1_amount = float(self.no1_amount_entry.get())
+                    self.trade_count += 1
+                    
+                    # 重置Yes1和No1价格为0
+                    self._reset_price_entries(self.yes1_price_entry, self.no1_price_entry)
+                    
+                    # 设置Yes2价格为默认值
+                    self.yes2_price_entry = self.yes_frame.grid_slaves(row=2, column=1)[0]
+                    self._set_target_price(self.yes2_price_entry, self.default_target_price)
+                    
+                    # 设置Yes5和No5价格为99（为确保可以正常卖出）
+                    self.yes5_price_entry = self.yes_frame.grid_slaves(row=8, column=1)[0]
+                    self.no5_price_entry = self.no_frame.grid_slaves(row=8, column=1)[0]
+                    self._batch_update_prices({
+                        self.yes5_price_entry: (self.default_normal_sell_price, 'red'),
+                        self.no5_price_entry: (self.default_normal_sell_price, 'red')
+                    })
+                    
+                    self.logger.info("\033[34m✅ First_trade执行成功\033[0m")
+                   
+                    # 发送交易邮件
+                    self.send_trade_email(
+                        trade_type="Buy Down1",
+                        price=self.buy_down_price,
+                        amount=self.buy_no1_amount,
+                        trade_count=self.trade_count,
+                        cash_value=self.cash_value,
+                        portfolio_value=self.portfolio_value
+                    )
+                    
+        except ValueError as e:
+            self.logger.error(f"价格转换错误: {str(e)}")
+        except Exception as e:
+            self.logger.error(f"First_trade执行失败: {str(e)}")
+        finally:
+            self.trading = False
+
+    def Sell_yes(self, asks_price_raw, bids_price_raw, asks_shares, bids_shares):
+        """当YES5价格等于实时Yes价格时自动卖出
+        包含两个条件:
+        1. 反水卖出策略: 价格在44-47区间，价差在-2到1之间
+        2. 正常卖出策略: 价格>=60，价差在0到1.1之间
+        """
+        try:
+            if not self.driver and not self.is_restarting:
+                self.restart_browser(force_restart=True)
+              
+            if asks_price_raw is None or bids_price_raw is None or bids_price_raw <= 10:
+                return
+                
+            # 获取Yes5价格
+            yes5_price = float(self.yes5_price_entry.get())
+            self.trading = True  # 开始交易
+            price_diff = round(bids_price_raw - yes5_price, 2) # 计算价差
+            
+            # 条件1: 反水卖出策略 - 价格在44-47区间，价差在-2到1之间
+            if (44 <= yes5_price <= 47) and (-2 <= price_diff <= 1) and (bids_shares > self.bids_shares):
+                self.logger.info(f"Up 5: {bids_price_raw}¢ 价格匹配,执行自动卖出 (反水策略)")
+                
+                self.yes5_target_price = yes5_price
+                
+                # 先卖 Up
+                self.only_sell_yes()
+                self.logger.info(f"卖完 Up 后，再卖 Down 3 SHARES")
+                
+                # 再卖 Down3
+                self.only_sell_no3()
+
+                # 设置 YES5/NO5 价格为 99
+                self._batch_update_prices({
+                    self.yes5_price_entry: (self.default_normal_sell_price, 'red'),
+                    self.no5_price_entry: (self.default_normal_sell_price, 'red')
+                })
+
+                # 重置交易次数
+                self.reset_trade_count += 1
+                self.reset_count_label.config(text=str(self.reset_trade_count))
+                self.sell_count = 0
+                self.trade_count = 0
+
+                # 重置YES2 价格为默认值
+                self.yes2_price_entry = self.yes_frame.grid_slaves(row=2, column=1)[0]
+                self._set_target_price(self.yes2_price_entry, self.default_target_price, 'black')
+            
+            # 条件2: 正常卖出策略 - 价格>=60，价差在0到1.1之间
+            elif yes5_price >= 60 and 0 <= price_diff <= 1.1 and (bids_shares > self.bids_shares):
+                self.logger.info(f"Up 5: {asks_price_raw}¢ 价格匹配,执行自动卖出 (正常策略)")
+                
+                self.yes5_target_price = yes5_price
+                
+                # 执行卖出YES操作
+                self.only_sell_yes()
+                
+                time.sleep(1)
+                self.driver.refresh()
+
+                self.logger.info("卖完 Up 后，再卖 Down")
+                # 卖 Down 之前先检查是否有 Down 标签
+                if self.find_position_label_no():
+                    self.only_sell_no()
+                
+                # 重置所有价格
+                for i in range(1, 5):  # 1-4
+                    yes_entry = getattr(self, f'yes{i}_price_entry', None)
+                    no_entry = getattr(self, f'no{i}_price_entry', None)
+                    if yes_entry and no_entry:
+                        self._reset_price_entries(yes_entry, no_entry)
+                
+                # 在所有操作完成后,重置交易
+                self.root.after(0, self.reset_trade)
+                
+        except Exception as e:
+            self.logger.error(f"❌ Sell_yes执行失败: {str(e)}")
+            
+        finally:
+            self.trading = False
+            
+    def Sell_no(self, asks_price_raw, bids_price_raw, asks_shares, bids_shares):
+        """当NO5价格等于实时No价格时自动卖出
+        包含两个条件:
+        1. 反水卖出策略: 价格在40-47区间，价差在-2到1之间
+        2. 正常卖出策略: 价格>=60，价差在0到1.1之间
+        """
+        try:
+            if not self.driver and not self.is_restarting:
+                self.restart_browser(force_restart=True)
+            
+            if asks_price_raw is None or asks_price_raw >= 90 or bids_price_raw is None:
+                return
+                
+            # 获取No5价格
+            no5_price = float(self.no5_price_entry.get())
+            self.trading = True  # 开始交易
+            price_diff = round(100 - asks_price_raw - no5_price, 2) # 计算价差
+            
+            # 条件1: 反水卖出策略 - 价格在40-47区间，价差在-2到1之间
+            if (40 <= no5_price <= 47) and (-2 <= price_diff <= 1) and (bids_shares > self.bids_shares):
+                self.logger.info(f"Down 5: {100 - asks_price_raw}¢ 价格匹配,执行自动卖出 (反水策略)")
+
+                # 先卖全部 Down
+                self.only_sell_no()
+                self.logger.info(f"卖完 Down 后，再卖 Up3 SHARES")
+                
+                # 再卖 Up3
+                self.only_sell_yes3()
+
+                # 设置 YES5/NO5 价格为 99
+                self._batch_update_prices({
+                    self.yes5_price_entry: (self.default_normal_sell_price, 'red'),
+                    self.no5_price_entry: (self.default_normal_sell_price, 'red')
+                })
+
+                # 重置交易
+                self.reset_trade_count += 1
+                self.reset_count_label.config(text=str(self.reset_trade_count))
+                self.logger.info(f"重置交易次数: {self.reset_trade_count}")
+                
+                self.sell_count = 0
+                self.trade_count = 0
+
+                # 重置NO2 价格为默认值
+                self.no2_price_entry = self.no_frame.grid_slaves(row=2, column=1)[0]
+                self._set_target_price(self.no2_price_entry, self.default_target_price, 'black')
+            
+            # 条件2: 正常卖出策略 - 价格>=60，价差在0到1.1之间
+            elif no5_price >= 60 and (0 <= price_diff <= 1.1) and (bids_shares > self.bids_shares):
+                self.logger.info(f"Down 5: {100 - asks_price_raw}¢ 价格匹配,执行自动卖出 (正常策略)")
+
+                self.no5_target_price = no5_price
+                
+                # 卖完 Down 后，自动再卖 Up                      
+                self.only_sell_no()
+                self.logger.info("卖完 Down 后，再卖 Up")
+                time.sleep(2)
+                self.driver.refresh()
+                
+                if self.find_position_label_yes():
+                    self.only_sell_yes()
+
+                # 重置所有价格
+                for i in range(1,5):  # 1-4
+                    yes_entry = getattr(self, f'yes{i}_price_entry', None)
+                    no_entry = getattr(self, f'no{i}_price_entry', None)
+                    if yes_entry and no_entry:
+                        self._reset_price_entries(yes_entry, no_entry)
+                        
+                # 在所有操作完成后,重置交易
+                self.root.after(0, self.reset_trade)
+                
+        except Exception as e:
+            self.logger.error(f"❌ Sell_no执行失败: {str(e)}")
+            
+        finally:
+            self.trading = False
+
+    def Forth_trade(self, asks_price_raw, bids_price_raw, asks_shares, bids_shares):
+        """处理Yes4/No4的自动交易，并在交易后设置特殊价格"""
+        try:
+            # 检查价格是否在合理范围内
+            if asks_price_raw is None or asks_price_raw <= 20 or bids_price_raw is None or bids_price_raw >= 97:
+                return
+                
+            # 获取Yes4和No4的价格输入框
+            yes4_price = float(self.yes4_price_entry.get())
+            no4_price = float(self.no4_price_entry.get())
+            self.trading = True  # 开始交易
+        
+            # 检查Yes4价格匹配
+            if self._check_price_match(asks_price_raw, yes4_price, True, asks_shares, self.asks_shares):
+                self.logger.info(f"Up 4: {asks_price_raw}¢ 价格匹配,执行自动交易")
+                
+                # 执行交易
+                if self._execute_buy_trade(True, 4):
+                    # 交易成功，获取金额
+                    self.buy_yes4_amount = float(self.yes4_amount_entry.get())
+                    
+                    # 重置Yes4和No4价格为0
+                    self._reset_price_entries(self.yes4_price_entry, self.no4_price_entry)
+                    
+                    # 设置Yes5和No5价格为特殊值（为防止第5次反水）
+                    # - Yes5设置为反水卖价(47)
+                    # - No5设置为低卖价(1)
+                    self.yes5_price_entry = self.yes_frame.grid_slaves(row=8, column=1)[0]
+                    self.no5_price_entry = self.no_frame.grid_slaves(row=8, column=1)[0]
+                    self._batch_update_prices({
+                        self.yes5_price_entry: (self.default_sell_price_backwater, 'red'),
+                        self.no5_price_entry: (self.default_sell_price, 'red')
+                    })
+
+                    # 增加交易次数
+                    self.trade_count += 1
+                    
+                    # 发送交易邮件
+                    self.send_trade_email(
+                        trade_type="Buy Up4",
+                        price=self.buy_up_price,
+                        amount=self.buy_yes4_amount,
+                        trade_count=self.trade_count,
+                        cash_value=self.cash_value,
+                        portfolio_value=self.portfolio_value
+                    )
+                    
+                    self.logger.info("\033[34m✅ Forth_trade执行成功\033[0m")
+                    
+            # 检查No4价格匹配
+            elif self._check_price_match(bids_price_raw, no4_price, False, bids_shares, self.bids_shares):
+                self.logger.info(f"Down 4: {100.0 - bids_price_raw}¢ 价格匹配,执行自动交易")
+                
+                # 执行交易
+                if self._execute_buy_trade(False, 4):
+                    # 交易成功，获取金额
+                    self.buy_no4_amount = float(self.no4_amount_entry.get())
+                    
+                    # 重置Yes4和No4价格为0
+                    self._reset_price_entries(self.yes4_price_entry, self.no4_price_entry)
+                    
+                    # 设置Yes5和No5价格为特殊值（为防止第5次反水）
+                    # - Yes5设置为低卖价(1)
+                    # - No5设置为反水卖价(47)
+                    self.yes5_price_entry = self.yes_frame.grid_slaves(row=8, column=1)[0]
+                    self.no5_price_entry = self.no_frame.grid_slaves(row=8, column=1)[0]
+                    self._batch_update_prices({
+                        self.yes5_price_entry: (self.default_sell_price, 'red'),
+                        self.no5_price_entry: (self.default_sell_price_backwater, 'red')
+                    })
+
+                    # 增加交易次数
+                    self.trade_count += 1
+                    
+                    # 发送交易邮件
+                    self.send_trade_email(
+                        trade_type="Buy Down4",
+                        price=self.buy_down_price,
+                        amount=self.buy_no4_amount,
+                        trade_count=self.trade_count,
+                        cash_value=self.cash_value,
+                        portfolio_value=self.portfolio_value
+                    )
+                    
+                    self.logger.info("\033[34m✅ Forth_trade执行成功\033[0m")
+                    
+        except ValueError as e:
+            self.logger.error(f"价格转换错误: {str(e)}")
+        except Exception as e:
+            self.logger.error(f"Forth_trade执行失败: {str(e)}")  
+        finally:
+            self.trading = False
+
+    def set_yes_no_cash(self):
+        """设置 Yes/No 各级金额"""
+        try:
+            #设置重试参数
+            max_retry = 15
+            retry_count = 0
+            cash_value = 0
+
+            while retry_count < max_retry:
+                try:
+                    # 获取 Cash 值
+                    cash_value = float(self.zero_time_cash_value)
+                    break
+                except Exception as e:
+                    retry_count += 1
+                    if retry_count < max_retry:
+                        time.sleep(2)
+                    else:
+                        raise ValueError("获取Cash值失败")
+            if cash_value is None:
+                raise ValueError("获取Cash值失败")
+            
+            # 获取金额设置中的百分比值
+            initial_percent = float(self.initial_amount_entry.get()) / 100  # 初始金额百分比
+            first_rebound_percent = float(self.first_rebound_entry.get()) / 100  # 反水一次百分比
+            n_rebound_percent = float(self.n_rebound_entry.get()) / 100  # 反水N次百分比
+
+            # 设置 Yes1 和 No1金额
+            base_amount = cash_value * initial_percent
+            self.yes1_entry = self.yes_frame.grid_slaves(row=1, column=1)[0]
+            self.yes1_amount_entry.delete(0, tk.END)
+            self.yes1_amount_entry.insert(0, f"{base_amount:.2f}")
+            self.no1_entry = self.no_frame.grid_slaves(row=1, column=1)[0]
+            self.no1_amount_entry.delete(0, tk.END)
+            self.no1_amount_entry.insert(0, f"{base_amount:.2f}")
+            
+            # 计算并设置 Yes2/No2金额
+            self.yes2_amount = base_amount * first_rebound_percent
+            self.yes2_entry = self.yes_frame.grid_slaves(row=3, column=1)[0]
+            self.yes2_entry.delete(0, tk.END)
+            self.yes2_entry.insert(0, f"{self.yes2_amount:.2f}")
+            self.no2_entry = self.no_frame.grid_slaves(row=3, column=1)[0]
+            self.no2_entry.delete(0, tk.END)
+            self.no2_entry.insert(0, f"{self.yes2_amount:.2f}")
+            
+            # 计算并设置 YES3/NO3 金额
+            self.yes3_amount = self.yes2_amount * n_rebound_percent
+            self.yes3_entry = self.yes_frame.grid_slaves(row=5, column=1)[0]
+            self.yes3_entry.delete(0, tk.END)
+            self.yes3_entry.insert(0, f"{self.yes3_amount:.2f}")
+            self.no3_entry = self.no_frame.grid_slaves(row=5, column=1)[0]
+            self.no3_entry.delete(0, tk.END)
+            self.no3_entry.insert(0, f"{self.yes3_amount:.2f}")
+
+            # 计算并设置 Yes4/No4金额
+            self.yes4_amount = self.yes3_amount * n_rebound_percent
+            self.yes4_entry = self.yes_frame.grid_slaves(row=7, column=1)[0]
+            self.yes4_entry.delete(0, tk.END)
+            self.yes4_entry.insert(0, f"{self.yes4_amount:.2f}")
+            self.no4_entry = self.no_frame.grid_slaves(row=7, column=1)[0]
+            self.no4_entry.delete(0, tk.END)
+            self.no4_entry.insert(0, f"{self.yes4_amount:.2f}")
+
+            # 获取当前CASH并显示,此CASH再次点击start按钮时会更新
+            self.logger.info("\033[34m✅ YES/NO 金额设置完成\033[0m")
+            
+        except Exception as e:
+            self.logger.error(f"设置金额失败: {str(e)}")
+            
+            self.schedule_retry_update()
+
+    def schedule_retry_update(self):
+        """安排重试更新金额"""
+        if hasattr(self, 'retry_timer'):
+            self.root.after_cancel(self.retry_timer)
+        self.retry_timer = self.root.after(3000, self.set_yes_no_cash)  # 3秒后重试
+
+    def schedule_update_amount(self, retry_count=0):
+        """设置金额,带重试机制"""
+        try:
+            if retry_count < 15:  # 最多重试15次
+                # 1秒后执行
+                self.root.after(1000, lambda: self.try_update_amount(retry_count))
+            else:
+                self.logger.warning("更新金额操作达到最大重试次数")
+        except Exception as e:
+            self.logger.error(f"安排更新金额操作失败: {str(e)}")
+
+    def try_update_amount(self, current_retry=0):
+        """尝试设置金额"""
+        try:
+            self.set_amount_button.invoke()
+            self.root.after(1000, lambda: self.check_amount_and_set_price(current_retry))
+        except Exception as e:
+            self.logger.error(f"更新金额操作失败 (尝试 {current_retry + 1}/15): {str(e)}")
+            # 如果失败，安排下一次重试
+            self.schedule_update_amount(current_retry + 1)
+
+    def check_amount_and_set_price(self, current_retry):
+        """检查金额是否设置成功,成功后设置价格"""
+        try:
+            # 检查yes金额是否为非0值
+            yes1_amount = self.yes1_amount_entry.get().strip()
+
+            if yes1_amount and yes1_amount != '0':
+                # 延迟5秒设置价格
+                self.root.after(5000, lambda: self.set_yes1_no1_default_target_price())
+                
+            else:
+                if current_retry < 15:  # 最多重试15次
+                    self.logger.info("\033[31m❌ 金额未成功设置,2秒后重试\033[0m")
+                    self.root.after(2000, lambda: self.check_amount_and_set_price(current_retry))
+                else:
+                    self.logger.warning("金额设置超时")
+        except Exception as e:
+            self.logger.error(f"检查金额设置状态失败: {str(e)}")
+
+    def set_yes1_no1_default_target_price(self):
+        """设置默认目标价格"""
+        self.yes1_price_entry.delete(0, tk.END)
+        self.yes1_price_entry.insert(0, self.default_target_price)
+        self.no1_price_entry.delete(0, tk.END)
+        self.no1_price_entry.insert(0, self.default_target_price)
+        self.logger.info(f"\033[34m✅ 设置买入价格{self.default_target_price}成功\033[0m")
+        self.close_windows()
+
+    def Second_trade(self, asks_price_raw, bids_price_raw, asks_shares, bids_shares):
+        """处理Yes2/No2的自动交易"""
+        try:
+            # 检查价格是否在合理范围内
+            if asks_price_raw is None or asks_price_raw <= 20 or bids_price_raw is None or bids_price_raw >= 97:
+                return
+                
+            # 获取Yes2和No2的价格输入框
+            yes2_price = float(self.yes2_price_entry.get())
+            no2_price = float(self.no2_price_entry.get())
+            self.trading = True  # 开始交易
+            
+            # 检查Yes2价格匹配
+            if self._check_price_match(asks_price_raw, yes2_price, True, asks_shares, self.asks_shares):
+                self.logger.info(f"Up 2: {asks_price_raw}¢ 价格匹配,执行自动交易")
+                
+                # 执行交易
+                if self._execute_buy_trade(True, 2):
+                    # 交易成功，获取金额
+                    self.buy_yes2_amount = float(self.yes2_amount_entry.get())
+                    
+                    # 重置Yes2和No2价格为0
+                    self._reset_price_entries(self.yes2_price_entry, self.no2_price_entry)
+                    
+                    # 设置No3价格为默认值
+                    self.no3_price_entry = self.no_frame.grid_slaves(row=4, column=1)[0]
+                    self._set_target_price(self.no3_price_entry, self.default_target_price)
+                    
+                    # 增加交易次数
+                    self.trade_count += 1
+                    
+                    # 发送交易邮件
+                    self.send_trade_email(
+                        trade_type="Buy Up2",
+                        price=self.buy_up_price,
+                        amount=self.buy_yes2_amount,
+                        trade_count=self.trade_count,
+                        cash_value=self.cash_value,
+                        portfolio_value=self.portfolio_value
+                    )
+                    
+                    self.logger.info("\033[34m✅ Second_trade执行成功\033[0m")
+                    
+            # 检查No2价格匹配
+            elif self._check_price_match(bids_price_raw, no2_price, False, bids_shares, self.bids_shares):
+                self.logger.info(f"Down 2: {100.0 - bids_price_raw}¢ 价格匹配,执行自动交易")
+                
+                # 执行交易
+                if self._execute_buy_trade(False, 2):
+                    # 交易成功，获取金额
+                    self.buy_no2_amount = float(self.no2_amount_entry.get())
+                    
+                    # 重置Yes2和No2价格为0
+                    self._reset_price_entries(self.yes2_price_entry, self.no2_price_entry)
+                    
+                    # 设置Yes3价格为默认值
+                    self.yes3_price_entry = self.yes_frame.grid_slaves(row=4, column=1)[0]
+                    self._set_target_price(self.yes3_price_entry, self.default_target_price)
+                    
+                    # 增加交易次数
+                    self.trade_count += 1
+                    
+                    # 发送交易邮件
+                    self.send_trade_email(
+                        trade_type="Buy Down2",
+                        price=self.buy_down_price,
+                        amount=self.buy_no2_amount,
+                        trade_count=self.trade_count,
+                        cash_value=self.cash_value,
+                        portfolio_value=self.portfolio_value
+                    )
+                    
+                    self.logger.info("\033[34m✅ Second_trade执行成功\033[0m")
+                    
+        except ValueError as e:
+            self.logger.error(f"价格转换错误: {str(e)}")
+        except Exception as e:
+            self.logger.error(f"Second_trade执行失败: {str(e)}")
+        finally:
+            self.trading = False
+            
+    def Third_trade(self, asks_price_raw, bids_price_raw, asks_shares, bids_shares):
+        """处理Yes3/No3的自动交易"""
+        try:
+            # 检查价格是否在合理范围内
+            if asks_price_raw is None or asks_price_raw <= 20 or bids_price_raw is None or bids_price_raw >= 97:
+                return
+                
+            # 获取Yes3和No3的价格输入框
+            yes3_price = float(self.yes3_price_entry.get())
+            no3_price = float(self.no3_price_entry.get())
+            self.trading = True  # 开始交易
+        
+            # 检查Yes3价格匹配
+            if self._check_price_match(asks_price_raw, yes3_price, True, asks_shares, self.asks_shares):
+                self.logger.info(f"Up 3: {asks_price_raw}¢ 价格匹配,执行自动交易")
+                
+                # 执行交易
+                if self._execute_buy_trade(True, 3):
+                    # 交易成功，获取金额
+                    self.buy_yes3_amount = float(self.yes3_amount_entry.get())
+                    
+                    # 重置Yes3和No3价格为0
+                    self._reset_price_entries(self.yes3_price_entry, self.no3_price_entry)
+                    
+                    # 设置No4价格为默认值
+                    self.no4_price_entry = self.no_frame.grid_slaves(row=6, column=1)[0]
+                    self._set_target_price(self.no4_price_entry, self.default_target_price)
+
+                    # 增加交易次数
+                    self.trade_count += 1
+                    
+                    # 发送交易邮件
+                    self.send_trade_email(
+                        trade_type="Buy Up3",
+                        price=self.buy_up_price,
+                        amount=self.buy_yes3_amount,
+                        trade_count=self.trade_count,
+                        cash_value=self.cash_value,
+                        portfolio_value=self.portfolio_value
+                    )   
+                    
+                    self.logger.info("\033[34m✅ Third_trade执行成功\033[0m")
+                    
+            # 检查No3价格匹配
+            elif self._check_price_match(bids_price_raw, no3_price, False, bids_shares, self.bids_shares):
+                self.logger.info(f"Down 3: {100.0 - bids_price_raw}¢ 价格匹配,执行自动交易")
+                
+                # 执行交易
+                if self._execute_buy_trade(False, 3):
+                    # 交易成功，获取金额
+                    self.buy_no3_amount = float(self.no3_amount_entry.get())
+                    
+                    # 重置Yes3和No3价格为0
+                    self._reset_price_entries(self.yes3_price_entry, self.no3_price_entry)
+                    
+                    # 设置Yes4价格为默认值
+                    self.yes4_price_entry = self.yes_frame.grid_slaves(row=6, column=1)[0]
+                    self._set_target_price(self.yes4_price_entry, self.default_target_price)
+                    
+                    # 增加交易次数
+                    self.trade_count += 1
+                    
+                    # 发送交易邮件
+                    self.send_trade_email(
+                        trade_type="Buy Down3",
+                        price=self.buy_down_price,
+                        amount=self.buy_no3_amount,
+                        trade_count=self.trade_count,
+                        cash_value=self.cash_value,
+                        portfolio_value=self.portfolio_value
+                    )
+                    
+                    self.logger.info("\033[34m✅ Third_trade执行成功\033[0m")
+                    
+        except ValueError as e:
+            self.logger.error(f"价格转换错误: {str(e)}")
+        except Exception as e:
+            self.logger.error(f"Third_trade执行失败: {str(e)}")    
+        finally:
+            self.trading = False
+
+    def only_sell_yes(self):
+        """只卖出YES"""
+        self.logger.info("执行only_sell_yes")
+
+        # 调用卖出按钮
+        self.position_sell_yes_button.invoke()
+        time.sleep(0.5)  # 必要的延迟，确保按钮点击生效
+        self.sell_confirm_button.invoke()
+        
+        # 等待交易完成
+        time.sleep(2)
+        
+        # 验证交易
+        if self._verify_trade('Sold', 'Up')[0]:
+            # 增加卖出计数
+            self.sell_count += 1
+            
+            # 发送交易邮件 - 卖出YES
+            self.send_trade_email(
+                trade_type="Sell Up",
+                price=self.sell_up_price,
+                amount=self.position_yes_cash(),  # 卖出时金额为总持仓
+                trade_count=self.sell_count,
+                cash_value=self.cash_value,
+                portfolio_value=self.portfolio_value
+            )
+        else:
+            self.logger.warning("❌ 卖出only_sell_yes验证失败,重试")
+            self.only_sell_yes()        
+       
+    def only_sell_no(self):
+        """只卖出Down"""
+        self.logger.info("执行only_sell_no")
+        
+        # 调用卖出按钮
+        self.position_sell_no_button.invoke()
+        time.sleep(0.5)  # 必要的延迟，确保按钮点击生效
+        self.sell_confirm_button.invoke()
+        
+        # 等待交易完成
+        time.sleep(2)
+        
+        # 验证交易
+        if self._verify_trade('Sold', 'Down')[0]:
+            # 增加卖出计数
+            self.sell_count += 1
+            
+            # 发送交易邮件 - 卖出NO
+            self.send_trade_email(
+                trade_type="Sell Down",
+                price=self.sell_down_price,
+                amount=self.position_no_cash(),  # 卖出时金额为总持仓
+                trade_count=self.sell_count,
+                cash_value=self.cash_value,
+                portfolio_value=self.portfolio_value
+            )
+        else:
+            self.logger.warning("❌ 卖出only_sell_no验证失败,重试")
+            self.only_sell_no()
+
+    def only_sell_yes3(self):
+        """只卖出YES3对应的shares数量"""
+        try:
+            self.logger.info("执行only_sell_yes3")
+            
+            # 计算要卖出的shares数量
+            yes3_shares = self.buy_yes3_amount / (self.default_target_price / 100)
+            
+            # 点击卖出按钮
+            self.position_sell_yes_button.invoke()
+            time.sleep(0.5)  # 必要的延迟，确保按钮点击生效
+
+            # 找到shares输入框并设置数量
+            shares_input = self._get_cached_element('AMOUNT_INPUT', refresh=True)
+            if not shares_input:
+                self.logger.error("❌ 未找到shares输入框")
+                return
+                
+            # 清除输入框并设置shares数量
+            shares_input.clear()
+            time.sleep(0.5)  # 必要的延迟，确保清除操作完成
+            shares_input.send_keys(str(yes3_shares))
+            time.sleep(0.5)  # 必要的延迟，确保输入操作完成
+            
+            # 点击确认按钮
+            self.sell_confirm_button.invoke()
+            
+            # 等待交易完成
+            time.sleep(2)
+            
+            # 验证交易
+            if self._verify_trade('Sold', 'Up')[0]:
+                self.logger.info(f"卖 Up 3 SHARES 成功")
+                
+                # 增加卖出计数
+                self.sell_count += 1
+                
+                # 发送交易邮件 - 卖出YES
+                self.send_trade_email(
+                    trade_type="Sell Up",
+                    price=self.sell_up_price,
+                    amount=self.position_yes_cash(),  # 卖出时金额为总持仓
+                    trade_count=self.sell_count,
+                    cash_value=self.cash_value,
+                    portfolio_value=self.portfolio_value
+                )
+                
+                self.logger.info(f"卖出 Up 3 SHARES: {yes3_shares} 成功")
+                
+        except Exception as e:
+            self.logger.error(f"❌ only_sell_yes3执行失败: {str(e)}")
+            self.only_sell_yes3()
+            
+    def only_sell_no3(self):
+        """只卖出NO3对应的shares数量"""
+        try:
+            self.logger.info("执行only_sell_no3")
+            
+            # 计算要卖出的shares数量
+            no3_shares = self.buy_no3_amount / (self.default_target_price / 100)
+            
+            # 点击卖出按钮
+            self.position_sell_no_button.invoke()
+            time.sleep(0.5)  # 必要的延迟，确保按钮点击生效
+            
+            # 找到shares输入框并设置数量
+            shares_input = self._get_cached_element('AMOUNT_INPUT', refresh=True)
+            if not shares_input:
+                self.logger.error("❌ 未找到shares输入框")
+                return
+                
+            # 清除输入框并设置shares数量
+            shares_input.clear()
+            time.sleep(0.5)  # 必要的延迟，确保清除操作完成
+            shares_input.send_keys(str(no3_shares))
+            time.sleep(0.5)  # 必要的延迟，确保输入操作完成
+            
+            # 点击确认按钮
+            self.sell_confirm_button.invoke()
+            
+            # 等待交易完成
+            time.sleep(2)
+            
+            # 验证交易
+            if self._verify_trade('Sold', 'Down')[0]:
+                self.logger.info(f"卖 Down 3 SHARES 成功")
+                
+                # 增加卖出计数
+                self.sell_count += 1
+                
+                # 发送交易邮件 - 卖出NO
+                self.send_trade_email(
+                    trade_type="Sell Down",
+                    price=self.sell_down_price,
+                    amount=self.position_no_cash(),  # 卖出时金额为总持仓
+                    trade_count=self.sell_count,
+                    cash_value=self.cash_value,
+                    portfolio_value=self.portfolio_value
+                )
+                
+                self.logger.info(f"卖出 Down 3 SHARES: {no3_shares} 成功")
+                
+        except Exception as e:
+            self.logger.error(f"❌ only_sell_no3执行失败: {str(e)}")
+            self.only_sell_no3()
+            
+    def Verify_buy_yes(self):
+        """
+        验证买入YES交易是否成功完成
+        
+        Returns:
+            bool: 交易是否成功
+        """
+        return self._verify_trade('Bought', 'Up')[0]
+        
+    def Verify_buy_no(self):
+        """
+        验证买入NO交易是否成功完成
+        
+        Returns:
+            bool: 交易是否成功
+        """
+        return self._verify_trade('Bought', 'Down')[0]
+    
+    def Verify_sold_yes(self):
+        """
+        验证卖出YES交易是否成功完成
+        
+        Returns:
+            bool: 交易是否成功
+        """
+        return self._verify_trade('Sold', 'Up')[0]
+        
+    def Verify_sold_no(self):
+        """
+        验证卖出NO交易是否成功完成
+        
+        Returns:
+            bool: 交易是否成功
+        """
+        return self._verify_trade('Sold', 'Down')[0]
+
+    def start_login_monitoring(self):
+        """监控登录状态"""
+        try:
+            with self.login_attempt_lock:
+                if self.login_running:
+                    return
+                self.login_running = True
+                
+            # 检查是否已经登录
+            try:
+                # 查找登录按钮
+                login_button = self.driver.find_element(By.XPATH, XPathConfig.LOGIN_BUTTON[0])
+                if login_button:
+                    self.logger.info("发现登录按钮，尝试登录")
+                    login_button.click()
+                    time.sleep(1)
+                    
+                    # 查找Google登录按钮
+                    google_login_button = self.driver.find_element(By.XPATH, XPathConfig.LOGIN_WITH_GOOGLE_BUTTON[0])
+                    if google_login_button:
+                        google_login_button.click()
+                        self.logger.info("已点击Google登录按钮")
+                        
+                        # 等待10秒，让用户手动登录
+                        time.sleep(10)
+                        
+            except NoSuchElementException:
+                # 未找到登录按钮，可能已经登录
+                self.logger.info("未找到登录按钮，可能已经登录")
+                
+            # 检查是否有接受按钮（Cookie提示等）
+            try:
+                accept_button = self.driver.find_element(By.XPATH, XPathConfig.ACCEPT_BUTTON[0])
+                if accept_button:
+                    accept_button.click()
+                    self.logger.info("已点击接受按钮")
+            except NoSuchElementException:
+                pass
+                
+        except Exception as e:
+            self.logger.error(f"登录监控失败: {str(e)}")
+        finally:
+            with self.login_attempt_lock:
+                self.login_running = False
+            
+            # 每10分钟检查一次登录状态
+            self.login_check_timer = self.root.after(600000, self.start_login_monitoring)
+
+    def start_url_monitoring(self):
+        """监控URL变化"""
+        try:
+            with self.url_monitoring_lock:
+                if self.url_monitoring_running:
+                    return
+                self.url_monitoring_running = True
+                
+            # 获取当前URL
+            current_url = self.driver.current_url
+            target_url = self.url_entry.get()
+            
+            # 如果URL不匹配，重新导航
+            if current_url != target_url:
+                self.logger.info(f"URL不匹配，重新导航到: {target_url}")
+                self.driver.get(target_url)
+                
+                # 等待页面加载完成
+                WebDriverWait(self.driver, 10).until(
+                    lambda driver: driver.execute_script('return document.readyState') == 'complete'
+                )
+                
+        except Exception as e:
+            self.logger.error(f"URL监控失败: {str(e)}")
+        finally:
+            with self.url_monitoring_lock:
+                self.url_monitoring_running = False
+            
+            # 每5分钟检查一次URL
+            self.url_check_timer = self.root.after(300000, self.start_url_monitoring)
+
+    def stop_url_monitoring(self):
+        """停止URL监控"""
+        if self.url_check_timer:
+            self.root.after_cancel(self.url_check_timer)
+            self.url_check_timer = None
+            self.logger.info("已停止URL监控")
+
+    def refresh_page(self):
+        """定期刷新页面"""
+        try:
+            with self.refresh_page_lock:
+                if self.refresh_page_running:
+                    return
+                self.refresh_page_running = True
+                
+            # 刷新页面
+            self.driver.refresh()
+            
+            # 等待页面加载完成
+            WebDriverWait(self.driver, 10).until(
+                lambda driver: driver.execute_script('return document.readyState') == 'complete'
+            )
+            
+            self.logger.info("页面已刷新")
+            
+        except Exception as e:
+            self.logger.error(f"页面刷新失败: {str(e)}")
+        finally:
+            with self.refresh_page_lock:
+                self.refresh_page_running = False
+            
+            # 每30分钟刷新一次页面
+            self.refresh_page_timer = self.root.after(1800000, self.refresh_page)
+
+    def stop_refresh_page(self):
+        """停止页面刷新"""
+        if self.refresh_page_timer:
+            self.root.after_cancel(self.refresh_page_timer)
+            self.refresh_page_timer = None
+            self.logger.info("已停止页面刷新")
+
+    def check_balance(self):
+        """检查账户余额"""
+        try:
+            # 获取Portfolio值
+            try:
+                portfolio_element = self.driver.find_element(By.XPATH, XPathConfig.PORTFOLIO_VALUE[0])
+                portfolio_text = portfolio_element.text
+            except NoSuchElementException:
+                portfolio_element = self._find_element_with_retry(XPathConfig.PORTFOLIO_VALUE, timeout=3, silent=True)
+                portfolio_text = portfolio_element.text if portfolio_element else "Portfolio: $0.00"
+            
+            # 获取Cash值
+            try:
+                cash_element = self.driver.find_element(By.XPATH, XPathConfig.CASH_VALUE[0])
+                cash_text = cash_element.text
+            except NoSuchElementException:
+                cash_element = self._find_element_with_retry(XPathConfig.CASH_VALUE, timeout=3, silent=True)
+                cash_text = cash_element.text if cash_element else "Cash: $0.00"
+            
+            # 更新GUI
+            self.portfolio_label.config(text=portfolio_text)
+            self.cash_label.config(text=cash_text)
+            
+            # 提取数值
+            portfolio_match = re.search(r'\$?([\d,]+\.?\d*)', portfolio_text)
+            cash_match = re.search(r'\$?([\d,]+\.?\d*)', cash_text)
+            
+            if portfolio_match:
+                self.portfolio_value = float(portfolio_match.group(1).replace(',', ''))
+            if cash_match:
+                self.cash_value = float(cash_match.group(1).replace(',', ''))
+            
+        except Exception as e:
+            self.logger.error(f"检查余额失败: {str(e)}")
+
+    def check_prices(self):
+        """检查价格变化"""
+        try:
+            # 获取价格
+            up_price, down_price, asks_shares, bids_shares = self.get_nearby_cents()
+            
+            if up_price is None or down_price is None:
+                return
+                
+            # 更新价格显示
+            self.yes_price_label.config(text=f"Up: {up_price:.2f}¢")
+            self.no_price_label.config(text=f"Down: {100.0 - down_price:.2f}¢")
+            
+            # 更新份额显示
+            self.up_shares_label.config(text=f"Shares: {int(asks_shares) if asks_shares else 0}")
+            self.down_shares_label.config(text=f"Shares: {int(bids_shares) if bids_shares else 0}")
+            
+            # 保存价格用于交易
+            self.buy_up_price = up_price
+            self.buy_down_price = down_price
+            self.sell_up_price = up_price
+            self.sell_down_price = 100.0 - down_price
+            
+            # 检查是否需要交易
+            if self.running and not self.trading:
+                # 第一次交易
+                self.First_trade(up_price, down_price, asks_shares, bids_shares)
+                
+                # 第二次交易
+                self.Second_trade(up_price, down_price, asks_shares, bids_shares)
+                
+                # 第三次交易
+                self.Third_trade(up_price, down_price, asks_shares, bids_shares)
+                
+                # 第四次交易
+                self.Forth_trade(up_price, down_price, asks_shares, bids_shares)
+                
+                # 卖出YES
+                self.Sell_yes(up_price, down_price, asks_shares, bids_shares)
+                
+                # 卖出NO
+                self.Sell_no(up_price, down_price, asks_shares, bids_shares)
+                
+        except Exception as e:
+            self.logger.error(f"检查价格失败: {str(e)}")
+
+    def _verify_trade(self, action_type, direction):
+        """
+        验证交易是否成功完成
+        
+        Args:
+            action_type: 'Bought' 或 'Sold'
+            direction: 'Up' 或 'Down'
+            
+        Returns:
+            tuple: (是否成功, 价格, 金额)
+        """
+        try:
+            # 等待历史记录元素出现
+            history_element = self._wait_for_element(XPathConfig.HISTORY, timeout=5)
+            
+            if not history_element:
+                self.logger.warning(f"未找到交易历史记录元素")
+                return False, 0, 0
+                
+            # 获取历史记录文本
+            history_text = history_element.text
+            
+            # 构建匹配模式
+            pattern = rf"{action_type} {direction}"
+            
+            # 检查是否包含预期的交易记录
+            if re.search(pattern, history_text, re.IGNORECASE):
+                self.logger.info(f"✅ 交易验证成功: {pattern}")
+                
+                # 提取价格和金额
+                price_match = re.search(r'(\d+\.?\d*)¢', history_text)
+                amount_match = re.search(r'\$(\d+\.?\d*)', history_text)
+                
+                price = float(price_match.group(1)) if price_match else 0
+                amount = float(amount_match.group(1)) if amount_match else 0
+                
+                return True, price, amount
+            else:
+                self.logger.warning(f"❌ 交易验证失败: 未找到 {pattern}")
+                return False, 0, 0
+                
+        except Exception as e:
+            self.logger.error(f"交易验证失败: {str(e)}")
+            return False, 0, 0
+
 if __name__ == "__main__":
     try:
-        # 打印启动参数，用于调试
-        
         # 初始化日志
         logger = Logger("main")
+        logger.info("====== 程序启动 ======")
+        logger.info(f"系统平台: {platform.system()} {platform.version()}")
+        logger.info(f"Python版本: {platform.python_version()}")
+        logger.info(f"启动参数: {sys.argv}")
             
         # 创建并运行主程序
         app = CryptoTrader()
+        
+        # 设置关闭处理
+        def on_close():
+            try:
+                if hasattr(app, 'driver') and app.driver:
+                    app.logger.info("正在关闭浏览器...")
+                    app.driver.quit()
+            except Exception as e:
+                logger.error(f"关闭浏览器时出错: {e}")
+            finally:
+                logger.info("====== 程序结束 ======")
+                app.root.destroy()
+                
+        app.root.protocol("WM_DELETE_WINDOW", on_close)
         app.root.mainloop()
         
     except Exception as e:
-        print(f"程序启动失败: {str(e)}")
+        error_msg = f"程序启动失败: {str(e)}"
+        print(error_msg)
         if 'logger' in locals():
-            logger.error(f"程序启动失败: {str(e)}")
+            logger.error(error_msg)
+            logger.error(f"详细错误: {str(e)}")
+        
+        # 尝试显示错误消息框
+        try:
+            import tkinter as tk
+            from tkinter import messagebox
+            root = tk.Tk()
+            root.withdraw()
+            messagebox.showerror("启动错误", error_msg)
+            root.destroy()
+        except:
+            pass
+            
         sys.exit(1)
     
