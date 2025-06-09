@@ -83,10 +83,10 @@ install_driver() {
             echo -e "${GREEN}成功下载 chromedriver ${TRY_VERSION}${NC}"
             rm -rf chromedriver-linux64*
             unzip -qo chromedriver.zip
-            mv chromedriver-linux64/chromedriver "$SCRIPT_DIR/chromedriver"
-            chmod +x "$SCRIPT_DIR/chromedriver"
-            echo -e "${GREEN}安装成功: $("$SCRIPT_DIR/chromedriver" --version)${NC}"
-            cd "$SCRIPT_DIR"
+            mv chromedriver-linux64/chromedriver "$HOME/chromedriver"
+            chmod +x "$HOME/chromedriver"
+            echo -e "${GREEN}安装成功: $("$HOME/chromedriver" --version)${NC}"
+            cd "$HOME"
             return 0
         fi
     done
@@ -146,7 +146,7 @@ if [ -x "$SCRIPT_DIR/google-chrome" ]; then
         --disable-renderer-backgrounding \
         --disable-features=TranslateUI,BlinkGenPropertyTrees,SitePerProcess,IsolateOrigins \
         --noerrdialogs \
-        --user-data-dir="$SCRIPT_DIR/ChromeDebug" \
+        --user-data-dir="$HOME/ChromeDebug" \
         about:blank
 else
     echo -e "${RED}Chrome 未找到${NC}"
