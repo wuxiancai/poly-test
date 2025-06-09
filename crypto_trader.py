@@ -28,11 +28,10 @@ from email.mime.multipart import MIMEMultipart
 from email.header import Header
 import socket
 import sys
-import requests
 import websocket
 from xpath_config import XPathConfig
-from threading import Thread
-import random
+
+
 
 
 class Logger:
@@ -141,7 +140,7 @@ class CryptoTrader:
         self.first_rebound = 220               # 第一次反水比例 (%)
         self.n_rebound = 120                   # 后续反水比例 (%)
         self.profit_rate = 2.2                 # 利润率 (%)
-        self.doubling_weeks = 30               # 翻倍周期 (天)
+        self.doubling = 30                     # 翻倍周期 (天)
         
         # 交易价格配置
         self.default_target_price = 52         # 默认买价
@@ -414,9 +413,9 @@ class CryptoTrader:
         double_frame.pack(side=tk.LEFT, padx=5)
         
         ttk.Label(double_frame, text="DB", style='Top.TLabel').pack(side=tk.LEFT, padx=(0, 2))
-        self.doubling_weeks_entry = ttk.Entry(double_frame, width=3)
-        self.doubling_weeks_entry.pack(side=tk.LEFT)
-        self.doubling_weeks_entry.insert(0, str(self.doubling_weeks))
+        self.doubling_entry = ttk.Entry(double_frame, width=3)
+        self.doubling_entry.pack(side=tk.LEFT)
+        self.doubling_entry.insert(0, str(self.doubling))
         
         # 监控网站配置
         url_frame = ttk.LabelFrame(scrollable_frame, text="🌐 Website Monitoring", padding=(8, 5))
