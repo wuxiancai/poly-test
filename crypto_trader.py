@@ -281,7 +281,11 @@ class CryptoTrader:
     def setup_gui(self):
         """优化后的GUI界面设置"""
         self.root = tk.Tk()
-        self.root.title("Polymarket Automatic Trading System Power by @wuxiancai")
+        # 修改标题和标签，在Linux环境下使用更简单的表示
+        if platform.system() != 'Darwin':
+            self.root.title("Polymarket Trading System")
+        else:
+            self.root.title("Polymarket Automatic Trading System Power by @wuxiancai")
         
         # 创建主滚动框架
         main_canvas = tk.Canvas(self.root, bg='#f8f9fa', highlightthickness=0)
@@ -353,11 +357,21 @@ class CryptoTrader:
             large_font = ('SF Pro Display', 14, 'normal')
             title_font = ('SF Pro Display', 14, 'bold')
         else:  # Linux and others
-            small_font = ('DejaVu Sans', 10, 'normal')
-            base_font = ('DejaVu Sans', 11, 'normal')
-            bold_font = ('DejaVu Sans', 11, 'bold')
-            large_font = ('DejaVu Sans', 13, 'normal')
-            title_font = ('DejaVu Sans', 14, 'bold')
+            # 使用Ubuntu LXDE更常见的字体
+            small_font = ('Ubuntu', 9, 'normal')
+            base_font = ('Ubuntu', 10, 'normal')
+            bold_font = ('Ubuntu', 10, 'bold')
+            large_font = ('Ubuntu', 12, 'normal')
+            title_font = ('Ubuntu', 12, 'bold')
+            # 尝试加载字体，如果失败则回退到通用字体
+            try:
+                self.root.tk.call('tk', 'fontchooser', 'configure', '-font', 'Ubuntu')
+            except:
+                small_font = ('Sans', 9, 'normal')
+                base_font = ('Sans', 10, 'normal')
+                bold_font = ('Sans', 10, 'bold')
+                large_font = ('Sans', 12, 'normal')
+                title_font = ('Sans', 12, 'bold')
         
         # 配置样式
         styles_config = {
@@ -369,19 +383,59 @@ class CryptoTrader:
             'Red.TLabel': {'foreground': '#dc3545', 'font': large_font},
             'Black.TLabel': {'foreground': '#212529', 'font': base_font},
             'Top.TLabel': {'foreground': '#212529', 'font': base_font},
-            'Warning.TLabelframe': {'font': title_font, 'foreground': '#FF0000', 'anchor': 'center'},
+            'Warning.TLabelframe': {'font': title_font, 'foreground': '#FF0000'},
             'LeftAligned.TButton': {'anchor': 'w', 'foreground': '#212529', 'padding': (1, 1)},
             'Red.TLabelframe.Label': {'foreground': '#dc3545'},
             'LeftBlack.TButton': {'foreground': '#212529', 'font': base_font},
-            'Black.TLabelframe': {'font': small_font, 'foreground': '#212529', 'anchor': 'center'}
+            'Black.TLabelframe': {'font': small_font, 'foreground': '#212529'}
         }
         
         for style_name, config in styles_config.items():
             style.configure(style_name, **config)
         
+        # 为Ubuntu LXDE环境特别设置更平坦的样式
+        if platform.system() != 'Darwin':
+            style.theme_use('clam')  # 使用更简洁的主题
+            # 调整按钮风格使其在LXDE下更美观
+            style.configure('TButton', relief='flat', borderwidth=1)
+            style.configure('TLabelframe', borderwidth=1)
+            style.configure('TEntry', borderwidth=1)
+        
+        # 更改标签文本，使用兼容性更好的表示方式
+        def get_label_text(label_text, is_mac=False):
+            """根据平台返回合适的标签文本"""
+            if is_mac:
+                return label_text  # macOS保持原样
+            
+            # Linux下简化标签
+            label_mapping = {
+                "⚠️ 配置设置": "⚠️ 娟娟细流,终入大海! 宁静致远,财富自由!",
+                "🌐 Website Monitoring": "网站监控",
+                "🎮 Control Panel": "控制面板",
+                "📊 Trading Information": "交易信息",
+                "💰 Live Prices": "实时价格",
+                "💳 Account Balance": "账户余额",
+                "⚙️ Trading Configuration": "交易配置",
+                "📈 YES Positions": "YES 仓位",
+                "📉 NO Positions": "NO 仓位",
+                "📈 Up:": "Up:",
+                "📉 Down:": "Down:",
+                "🌙Midnight:": "午夜:",
+                "⚡Now:": "现在:",
+                "📈:": "比率:"
+            }
+            return label_mapping.get(label_text, label_text)
+        
+        # 使用系统相关的标签文本
+        is_mac = platform.system() == 'Darwin'
+        
         # 金额设置框架
-        amount_settings_frame = ttk.LabelFrame(scrollable_frame, text="⚠️ 娟娟细流,终入大海! 宁静致远,财富自由!", 
-                                             padding=(10, 8), style='Warning.TLabelframe')
+        amount_settings_frame = ttk.LabelFrame(
+            scrollable_frame, 
+            text=get_label_text("⚠️ 娟娟细流,终入大海! 宁静致远,财富自由!", is_mac), 
+            padding=(10, 8), 
+            style='Warning.TLabelframe'
+        )
         amount_settings_frame.pack(fill="x", padx=8, pady=6)
 
         # 创建主要设置容器
@@ -412,7 +466,7 @@ class CryptoTrader:
 
         # 翻倍天数设置
         double_frame = ttk.Frame(amount_frame)
-        double_frame.pack(side=tk.LEFT, padx=5)
+        double_frame.pack(side=tk.LEFT, padx=2)
         
         ttk.Label(double_frame, text="DB", style='Top.TLabel').pack(side=tk.LEFT, padx=(0, 2))
         self.doubling_entry = ttk.Entry(double_frame, width=3)
@@ -420,7 +474,11 @@ class CryptoTrader:
         self.doubling_entry.insert(0, str(self.doubling))
         
         # 监控网站配置
-        url_frame = ttk.LabelFrame(scrollable_frame, text="🌐 Website Monitoring", padding=(8, 5))
+        url_frame = ttk.LabelFrame(
+            scrollable_frame, 
+            text=get_label_text("🌐 Website Monitoring", is_mac), 
+            padding=(8, 5)
+        )
         url_frame.pack(fill="x", padx=8, pady=6)
         
         url_container = ttk.Frame(url_frame)
@@ -441,7 +499,11 @@ class CryptoTrader:
             self.url_entry.set(current_url)
         
         # 控制按钮区域
-        control_frame = ttk.LabelFrame(scrollable_frame, text="🎮 Control Panel", padding=(8, 5))
+        control_frame = ttk.LabelFrame(
+            scrollable_frame, 
+            text=get_label_text("🎮 Control Panel", is_mac), 
+            padding=(8, 5)
+        )
         control_frame.pack(fill="x", padx=8, pady=6)
         
         # 主控制按钮行
@@ -477,7 +539,11 @@ class CryptoTrader:
         self.reset_count_label.pack(side=tk.LEFT, padx=(0, 15))
 
         # 交易信息显示区域
-        trading_info_frame = ttk.LabelFrame(scrollable_frame, text="📊 Trading Information", padding=(8, 5))
+        trading_info_frame = ttk.LabelFrame(
+            scrollable_frame, 
+            text=get_label_text("📊 Trading Information", is_mac), 
+            padding=(8, 5)
+        )
         trading_info_frame.pack(fill="x", padx=8, pady=6)
 
         # 交易币对显示
@@ -494,9 +560,9 @@ class CryptoTrader:
         
         # 价格信息网格布局
         price_info_items = [
-            ("🌙Midnight:", "binance_zero_price_label", "0"),
-            ("⚡Now:", "binance_now_price_label", "0"),
-            ("📈:", "binance_rate_display", "0%")
+            (get_label_text("🌙Midnight:", is_mac), "binance_zero_price_label", "0"),
+            (get_label_text("⚡Now:", is_mac), "binance_now_price_label", "0"),
+            (get_label_text("📈:", is_mac), "binance_rate_display", "0%")
         ]
         
         for i, (label_text, attr_name, default_value) in enumerate(price_info_items):
@@ -521,17 +587,21 @@ class CryptoTrader:
                 setattr(self, attr_name, label)
         
         # 实时价格显示区域
-        price_frame = ttk.LabelFrame(scrollable_frame, text="💰 Live Prices", padding=(8, 5))
+        price_frame = ttk.LabelFrame(
+            scrollable_frame, 
+            text=get_label_text("💰 Live Prices", is_mac), 
+            padding=(8, 5)
+        )
         price_frame.pack(fill="x", padx=8, pady=6)
         
         # 价格显示容器
         prices_container = ttk.Frame(price_frame)
         prices_container.pack(fill="x", pady=2)
         
-        # Up/Down 价格和份额显示
+        # Up/Down 价格和份额显示 - 简化文本显示
         price_items = [
-            ("📈 Up:", "yes_price_label", "Up: waiting..."),
-            ("📉 Down:", "no_price_label", "Down: waiting...")
+            (get_label_text("📈 Up:", is_mac), "yes_price_label", "Up: waiting..."),
+            (get_label_text("📉 Down:", is_mac), "no_price_label", "Down: waiting...")
         ]
         
         for i, (icon_text, attr_name, default_text) in enumerate(price_items):
@@ -542,8 +612,13 @@ class CryptoTrader:
             price_frame_item = ttk.Frame(item_container)
             price_frame_item.pack(fill="x", pady=1)
             
-            price_label = ttk.Label(price_frame_item, text=default_text, 
-                                   font=(base_font[0], 16, 'bold'), foreground='#9370DB')
+            # 针对LXDE环境使用更简单的颜色显示方式
+            if platform.system() != 'Darwin':
+                price_label = ttk.Label(price_frame_item, text=default_text, 
+                                      font=(base_font[0], 14, 'bold'), foreground='#6633cc')
+            else:
+                price_label = ttk.Label(price_frame_item, text=default_text, 
+                                      font=(base_font[0], 16, 'bold'), foreground='#9370DB')
             price_label.pack()
             setattr(self, attr_name, price_label)
             
@@ -552,13 +627,23 @@ class CryptoTrader:
             shares_frame_item.pack(fill="x", pady=1)
             
             shares_attr = "up_shares_label" if "yes_price_label" == attr_name else "down_shares_label"
-            shares_label = ttk.Label(shares_frame_item, text="Shares: waiting...",
-                                   font=(base_font[0], 14, 'normal'), foreground='#9370DB')
+            
+            # 针对LXDE环境使用更简单的颜色显示方式
+            if platform.system() != 'Darwin':
+                shares_label = ttk.Label(shares_frame_item, text="数量: waiting...",
+                                      font=(base_font[0], 12, 'normal'), foreground='#6633cc')
+            else:
+                shares_label = ttk.Label(shares_frame_item, text="Shares: waiting...",
+                                      font=(base_font[0], 14, 'normal'), foreground='#9370DB')
             shares_label.pack()
             setattr(self, shares_attr, shares_label)
 
         # 资金显示区域
-        balance_frame = ttk.LabelFrame(scrollable_frame, text="💳 Account Balance", padding=(8, 5))
+        balance_frame = ttk.LabelFrame(
+            scrollable_frame, 
+            text=get_label_text("💳 Account Balance", is_mac), 
+            padding=(8, 5)
+        )
         balance_frame.pack(fill="x", padx=8, pady=6)
         
         balance_container = ttk.Frame(balance_frame)
@@ -566,8 +651,8 @@ class CryptoTrader:
         
         # Portfolio 和 Cash 显示
         balance_items = [
-            ("📊 Portfolio:", "portfolio_label", "Portfolio: waiting..."),
-            ("💵 Cash:", "cash_label", "Cash: waiting...")
+            (get_label_text("📊 Portfolio:", is_mac), "portfolio_label", "Portfolio: waiting..."),
+            (get_label_text("💵 Cash:", is_mac), "cash_label", "Cash: waiting...")
         ]
         
         for i, (label_text, attr_name, default_text) in enumerate(balance_items):
@@ -580,7 +665,11 @@ class CryptoTrader:
             setattr(self, attr_name, balance_label)
         
         # Yes/No 交易配置区域
-        trading_config_frame = ttk.LabelFrame(scrollable_frame, text="⚙️ Trading Configuration", padding=(8, 5))
+        trading_config_frame = ttk.LabelFrame(
+            scrollable_frame, 
+            text=get_label_text("⚙️ Trading Configuration", is_mac), 
+            padding=(8, 5)
+        )
         trading_config_frame.pack(fill="x", padx=8, pady=6)
         
         # 创建左右分栏
@@ -588,12 +677,20 @@ class CryptoTrader:
         config_container.pack(fill="x", pady=2)
         
         # YES 区域配置
-        self.yes_frame = ttk.LabelFrame(config_container, text="📈 YES Positions", padding=(5, 3))
+        self.yes_frame = ttk.LabelFrame(
+            config_container, 
+            text=get_label_text("📈 YES Positions", is_mac), 
+            padding=(5, 3)
+        )
         self.yes_frame.grid(row=0, column=0, padx=(0, 4), sticky="nsew")
         config_container.grid_columnconfigure(0, weight=1)
 
         # No 配置区域
-        self.no_frame = ttk.LabelFrame(config_container, text="📉 NO Positions", padding=(5, 3))
+        self.no_frame = ttk.LabelFrame(
+            config_container, 
+            text=get_label_text("📉 NO Positions", is_mac), 
+            padding=(5, 3)
+        )
         self.no_frame.grid(row=0, column=1, padx=(4, 0), sticky="nsew")
         config_container.grid_columnconfigure(1, weight=1)
         
@@ -665,8 +762,11 @@ class CryptoTrader:
         # 配置列权重
         self.no_frame.grid_columnconfigure(1, weight=1)
 
-        # 创建按钮区域
-        trade_frame = ttk.LabelFrame(scrollable_frame, text="Buttons", style='Black.TLabelframe')
+        # 创建按钮区域 - 调整按钮宽度以适应Linux
+        if platform.system() != 'Darwin':
+            self.button_width = 9
+        
+        trade_frame = ttk.LabelFrame(scrollable_frame, text="操作按钮", style='Black.TLabelframe')
         trade_frame.pack(fill="x", padx=2, pady=2)
         
         # 按钮配置
@@ -711,18 +811,79 @@ class CryptoTrader:
         for i in range(4):
             trade_frame.grid_columnconfigure(i, weight=1)
             
-        # 窗口自适应内容大小
+        # 设置窗口自适应内容大小
         self.root.update_idletasks()
         
         content_height = scrollable_frame.winfo_reqheight()
         
         # 计算并设置窗口的初始大小
-        final_width = 470
+        final_width = 480 if platform.system() != 'Darwin' else 470
         # 高度自适应，但有最小和最大值
         final_height = max(400, min(content_height + 20, 800))
 
         self.root.geometry(f'{final_width}x{final_height}+0+0')
-        self.root.minsize(470, 1050)
+        self.root.minsize(480 if platform.system() != 'Darwin' else 470, 1050)
+        
+        # 调整LXDE下的DPI设置以改善显示
+        if platform.system() != 'Darwin':
+            try:
+                self.root.tk.call('tk', 'scaling', 1.0)
+            except:
+                pass
+                
+        # 最后一次更新确保布局正确
+        self.root.update_idletasks()
+        
+        # 检查是否在Linux上，调整主窗口配色
+        if platform.system() != 'Darwin':
+            # 设置更合适的背景颜色
+            main_canvas.configure(bg='#f0f0f0')
+            self.root.configure(bg='#f0f0f0')
+            scrollable_frame.configure(style='TFrame')
+            # 为各个框架添加视觉分隔效果
+            style.configure('TFrame', background='#f0f0f0')
+            style.configure('TLabelframe', background='#f0f0f0')
+            style.configure('TLabelframe.Label', background='#f0f0f0')
+            # 添加更多视觉分隔
+            for frame in [amount_settings_frame, url_frame, control_frame, 
+                         trading_info_frame, price_frame, balance_frame,
+                         trading_config_frame, trade_frame]:
+                frame.configure(relief='groove')
+            
+            # 调整按钮样式使其在LXDE下更明显
+            style.map('TButton', 
+                     background=[('active', '#e0e0e0'), ('!disabled', '#f5f5f5')],
+                     relief=[('pressed', 'sunken'), ('!pressed', 'raised')])
+            
+            # 调整输入框和组合框样式
+            style.configure('TEntry', background='white', fieldbackground='white')
+            style.configure('TCombobox', background='white', fieldbackground='white')
+            
+            # 添加提示信息
+            self.root.option_add('*TCombobox*Listbox.background', 'white')
+            self.root.option_add('*TCombobox*Listbox.foreground', 'black')
+            
+            # 通过图标路径检查来判断系统图标可用性
+            icon_available = False
+            possible_icon_paths = [
+                '/usr/share/icons/hicolor/32x32/apps/web-browser.png',
+                '/usr/share/icons/Adwaita/32x32/apps/web-browser.png',
+                '/usr/share/pixmaps/web-browser.png'
+            ]
+            
+            for path in possible_icon_paths:
+                if os.path.exists(path):
+                    try:
+                        icon = tk.PhotoImage(file=path)
+                        self.root.iconphoto(True, icon)
+                        icon_available = True
+                        break
+                    except:
+                        pass
+                        
+            if not icon_available:
+                # 如果系统图标不可用，创建一个简单的文本标题
+                self.root.title("● Polymarket Trading")
         
         # 最后一次更新确保布局正确
         self.root.update_idletasks()
