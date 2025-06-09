@@ -1448,7 +1448,7 @@ class CryptoTrader:
             except StaleElementReferenceException:
                 return None, None, None, None
             except Exception as e:
-                self.logger.error(f"执行JavaScript获取兄弟节点文本失败: {str(e)}")
+                #self.logger.error(f"执行JavaScript获取兄弟节点文本失败: {str(e)}") # 不能试用error,因为是正常情况,否则会导致大量日志
                 return None, None, None, None
             
             # 解析上方元素文本(asks/up)
@@ -1500,11 +1500,11 @@ class CryptoTrader:
                 return up_price_val, down_price_val, asks_shares_val, bids_shares_val 
                 
             except ValueError as e:
-                self.logger.error(f"数值转换错误: {e}")
+                #self.logger.error(f"数值转换错误: {e}") # 不能试用error,因为是正常情况,否则会导致大量日志
                 return None, None, None, None
                 
         except Exception as e:
-            self.logger.error(f"解析价格和股数时发生未知错误: {str(e)}")
+            #self.logger.error(f"解析价格和股数时发生未知错误: {str(e)}") # 不能试用error,因为是正常情况,否则会导致大量日志
             return None, None, None, None
     
     def _wait_for_element(self, xpath_list, timeout=10, poll_frequency=0.5):
@@ -1576,7 +1576,7 @@ class CryptoTrader:
             entry.insert(0, "0")
             entry.configure(foreground='black')
             
-    def _set_target_price(self, entry, price, color='black'):
+    def _set_target_price(self, entry, price, color='red'): # 设置目标价格颜色为红色
         """设置目标价格
         
         Args:
@@ -1597,7 +1597,7 @@ class CryptoTrader:
         for entry, (price, color) in entry_price_map.items():
             self._set_target_price(entry, price, color)
             
-    def _execute_buy_trade(self, is_yes_direction, trade_num, retry_count=30):
+    def _execute_buy_trade(self, is_yes_direction, trade_num, retry_count=50):
         """执行买入交易
         
         Args:
@@ -1649,9 +1649,7 @@ class CryptoTrader:
                 time.sleep(1)
                 return self._execute_buy_trade(is_yes_direction, trade_num, retry_count - 1)
             return False
-    """以上代码是交易主体函数 1-4,从第 1370 行到第 2418行"""
-
-    """以下代码是交易过程中的各种点击方法函数，涉及到按钮的点击，从第 2419 行到第 2528 行"""
+    
     def click_buy_confirm_button(self):
         try:
             buy_confirm_button = self.driver.find_element(By.XPATH, XPathConfig.BUY_CONFIRM_BUTTON[0])
@@ -1880,7 +1878,7 @@ class CryptoTrader:
               
         except Exception as e:
             self.logger.error(f"Amount操作失败: {str(e)}")
-    """以下代码是交易过程中的功能性函数,买卖及确认买卖成功,从第 2529 行到第 2703 行"""
+
     def position_yes_cash(self):
         """获取当前持仓YES的金额"""
         try:
@@ -2102,7 +2100,6 @@ class CryptoTrader:
                 else:
                     raise
 
-    """以下代码是自动找币功能,从第 2981 行到第 35320 行"""
     def find_position_label_yes(self):
         """查找Yes持仓标签"""
         max_retries = 2
@@ -2872,8 +2869,8 @@ class CryptoTrader:
     def Sell_yes(self, asks_price_raw, bids_price_raw, asks_shares, bids_shares):
         """当YES5价格等于实时Yes价格时自动卖出
         包含两个条件:
-        1. 反水卖出策略: 价格在44-47区间，价差在-2到1之间
-        2. 正常卖出策略: 价格>=60，价差在0到1.1之间
+        1. 反水卖出策略: 价格在44-47区间,价差在-2到1之间
+        2. 正常卖出策略: 价格>=60,价差在0到1.1之间
         """
         try:
             if not self.driver and not self.is_restarting:
@@ -2952,8 +2949,8 @@ class CryptoTrader:
     def Sell_no(self, asks_price_raw, bids_price_raw, asks_shares, bids_shares):
         """当NO5价格等于实时No价格时自动卖出
         包含两个条件:
-        1. 反水卖出策略: 价格在40-47区间，价差在-2到1之间
-        2. 正常卖出策略: 价格>=60，价差在0到1.1之间
+        1. 反水卖出策略: 价格在40-47区间,价差在-2到1之间
+        2. 正常卖出策略: 价格>=6,价差在0到1.1之间
         """
         try:
             if not self.driver and not self.is_restarting:
@@ -3028,7 +3025,7 @@ class CryptoTrader:
             self.trading = False
 
     def Forth_trade(self, asks_price_raw, bids_price_raw, asks_shares, bids_shares):
-        """处理Yes4/No4的自动交易，并在交易后设置特殊价格"""
+        """处理Yes4/No4的自动交易,并在交易后设置特殊价格"""
         try:
             # 检查价格是否在合理范围内
             if asks_price_raw is None or asks_price_raw <= 20 or bids_price_raw is None or bids_price_raw >= 97:
