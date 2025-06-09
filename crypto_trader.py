@@ -410,19 +410,19 @@ class CryptoTrader:
             # Linux下简化标签
             label_mapping = {
                 "⚠️ 配置设置": "⚠️ 娟娟细流,终入大海! 宁静致远,财富自由!",
-                "🌐 Website Monitoring": "网站监控",
-                "🎮 Control Panel": "控制面板",
-                "📊 Trading Information": "交易信息",
-                "💰 Live Prices": "实时价格",
-                "💳 Account Balance": "账户余额",
-                "⚙️ Trading Configuration": "交易配置",
-                "📈 YES Positions": "YES 仓位",
-                "📉 NO Positions": "NO 仓位",
+                "🌐 Website Monitoring": "Website Monitoring",
+                "🎮 Control Panel": "Control Panel",
+                "📊 Trading Information": "Trading Information",
+                "💰 Live Prices": "Live Prices",
+                "💳 Account Balance": "Account Balance",
+                "⚙️ Trading Configuration": "Trading Configuration",
+                "📈 YES Positions": "YES Positions",
+                "📉 NO Positions": "NO Positions",
                 "📈 Up:": "Up:",
                 "📉 Down:": "Down:",
-                "🌙Midnight:": "午夜:",
-                "⚡Now:": "现在:",
-                "📈:": "比率:"
+                "🌙Midnight:": "Midnight:",
+                "⚡Now:": "Now:",
+                "📈:": "Rate:"
             }
             return label_mapping.get(label_text, label_text)
         
@@ -766,7 +766,7 @@ class CryptoTrader:
         if platform.system() != 'Darwin':
             self.button_width = 9
         
-        trade_frame = ttk.LabelFrame(scrollable_frame, text="操作按钮", style='Black.TLabelframe')
+        trade_frame = ttk.LabelFrame(scrollable_frame, text="Buttons", style='Black.TLabelframe')
         trade_frame.pack(fill="x", padx=2, pady=2)
         
         # 按钮配置
