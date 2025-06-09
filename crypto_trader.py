@@ -630,7 +630,7 @@ class CryptoTrader:
             
             # 针对LXDE环境使用更简单的颜色显示方式
             if platform.system() != 'Darwin':
-                shares_label = ttk.Label(shares_frame_item, text="数量: waiting...",
+                shares_label = ttk.Label(shares_frame_item, text="Shares: waiting...",
                                       font=(base_font[0], 12, 'normal'), foreground='#6633cc')
             else:
                 shares_label = ttk.Label(shares_frame_item, text="Shares: waiting...",
