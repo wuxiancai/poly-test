@@ -41,11 +41,11 @@
         },
         "Yes5": {
             "target_price": 0,
-            "amount": 0
+            "amount": null
         },
         "No5": {
             "target_price": 0,
-            "amount": 0
+            "amount": null
         },
         "Up1": {
             "target_price": 0,
@@ -65,7 +65,7 @@
         },
         "Up5": {
             "target_price": 0,
-            "amount": 0
+            "amount": null
         },
         "Down1": {
             "target_price": 0,
@@ -85,7 +85,7 @@
         },
         "Down5": {
             "target_price": 0,
-            "amount": 0
+            "amount": null
         }
     },
     "url_history": [
