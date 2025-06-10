@@ -1832,7 +1832,7 @@ class CryptoTrader:
             price_diff = round(bids_price_raw - yes5_price, 2) # 计算价差
             
             # 条件1: 反水卖出策略 - 价格在44-47区间，价差在-2到1之间
-            if (44 <= yes5_price <= 47) and (-2 <= price_diff <= 1) and (bids_shares > self.bids_shares):
+            if (10 <= yes5_price <= 47) and (-2 <= price_diff <= 1) and (bids_shares > self.bids_shares):
                 self.logger.info(f"✅  Up 5: {bids_price_raw}¢ 价格匹配,执行自动卖出 (反水策略)")
                 
                 self.yes5_target_price = yes5_price
@@ -1912,7 +1912,7 @@ class CryptoTrader:
             price_diff = round(100 - asks_price_raw - no5_price, 2) # 计算价差
             
             # 条件1: 反水卖出策略 - 价格在40-47区间，价差在-2到1之间
-            if (40 <= no5_price <= 47) and (-2 <= price_diff <= 1) and (bids_shares > self.bids_shares):
+            if (10 <= no5_price <= 47) and (-2 <= price_diff <= 1) and (bids_shares > self.bids_shares):
                 self.logger.info(f"✅ Down 5: {100 - asks_price_raw}¢ 价格匹配,执行自动卖出 (反水策略)")
 
                 # 先卖全部 Down
