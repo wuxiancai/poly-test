@@ -1971,8 +1971,12 @@ class CryptoTrader:
         finally:
             self.trading = False
 
-    def only_sell_yes(self):
-        """只卖出YES"""
+    def only_sell_yes(self, retry_count=3):
+        """只卖出YES
+        
+        Args:
+            retry_count: 最大重试次数
+        """
         self.logger.info("✅ 执行only_sell_yes")
 
         # 调用卖出按钮
@@ -1997,12 +2001,22 @@ class CryptoTrader:
                 cash_value=self.cash_value,
                 portfolio_value=self.portfolio_value
             )
+            return True
         else:
-            self.logger.warning("❌ 卖出only_sell_yes验证失败,重试")
-            self.only_sell_yes()        
-       
-    def only_sell_no(self):
-        """只卖出Down"""
+            if retry_count > 0:
+                self.logger.warning(f"❌ 卖出only_sell_yes验证失败,重试 (剩余{retry_count}次)")
+                time.sleep(1)
+                return self.only_sell_yes(retry_count - 1)
+            else:
+                self.logger.error("❌ 卖出only_sell_yes达到最大重试次数,放弃")
+                return False
+        
+    def only_sell_no(self, retry_count=3):
+        """只卖出Down
+        
+        Args:
+            retry_count: 最大重试次数
+        """
         self.logger.info("✅ 执行only_sell_no")
         
         # 调用卖出按钮
@@ -2027,12 +2041,22 @@ class CryptoTrader:
                 cash_value=self.cash_value,
                 portfolio_value=self.portfolio_value
             )
+            return True
         else:
-            self.logger.warning("❌ 卖出only_sell_no验证失败,重试")
-            self.only_sell_no()
+            if retry_count > 0:
+                self.logger.warning(f"❌ 卖出only_sell_no验证失败,重试 (剩余{retry_count}次)")
+                time.sleep(1)
+                return self.only_sell_no(retry_count - 1)
+            else:
+                self.logger.error("❌ 卖出only_sell_no达到最大重试次数,放弃")
+                return False
 
-    def only_sell_yes3(self):
-        """只卖出YES3对应的shares数量"""
+    def only_sell_yes3(self, retry_count=3):
+        """只卖出YES3对应的shares数量
+        
+        Args:
+            retry_count: 最大重试次数
+        """
         try:
             self.logger.info("✅ 执行only_sell_yes3")
             
@@ -2047,7 +2071,7 @@ class CryptoTrader:
             shares_input = self._get_cached_element('AMOUNT_INPUT', refresh=True)
             if not shares_input:
                 self.logger.error("❌ 未找到shares输入框")
-                return
+                return False
                 
             # 清除输入框并设置shares数量
             shares_input.clear()
@@ -2079,13 +2103,30 @@ class CryptoTrader:
                 )
                 
                 self.logger.info(f"卖出 Up 3 SHARES: {yes3_shares} 成功")
+                return True
+            else:
+                if retry_count > 0:
+                    self.logger.warning(f"❌ 卖出only_sell_yes3验证失败,重试 (剩余{retry_count}次)")
+                    time.sleep(1)
+                    return self.only_sell_yes3(retry_count - 1)
+                else:
+                    self.logger.error("❌ 卖出only_sell_yes3达到最大重试次数,放弃")
+                    return False
                 
         except Exception as e:
             self.logger.error(f"❌ only_sell_yes3执行失败: {str(e)}")
-            self.only_sell_yes3()
-            
-    def only_sell_no3(self):
-        """只卖出NO3对应的shares数量"""
+            if retry_count > 0:
+                time.sleep(1)
+                return self.only_sell_yes3(retry_count - 1)
+            else:
+                return False
+
+    def only_sell_no3(self, retry_count=3):
+        """只卖出NO3对应的shares数量
+        
+        Args:
+            retry_count: 最大重试次数
+        """
         try:
             self.logger.info("✅ 执行only_sell_no3")
             
@@ -2100,7 +2141,7 @@ class CryptoTrader:
             shares_input = self._get_cached_element('AMOUNT_INPUT', refresh=True)
             if not shares_input:
                 self.logger.error("❌ 未找到shares输入框")
-                return
+                return False
                 
             # 清除输入框并设置shares数量
             shares_input.clear()
@@ -2132,11 +2173,24 @@ class CryptoTrader:
                 )
                 
                 self.logger.info(f"✅ 卖出 Down 3 SHARES: {no3_shares} 成功")
+                return True
+            else:
+                if retry_count > 0:
+                    self.logger.warning(f"❌ 卖出only_sell_no3验证失败,重试 (剩余{retry_count}次)")
+                    time.sleep(1)
+                    return self.only_sell_no3(retry_count - 1)
+                else:
+                    self.logger.error("❌ 卖出only_sell_no3达到最大重试次数,放弃")
+                    return False
                 
         except Exception as e:
             self.logger.error(f"❌ only_sell_no3执行失败: {str(e)}")
-            self.only_sell_no3()
-            
+            if retry_count > 0:
+                time.sleep(1)
+                return self.only_sell_no3(retry_count - 1)
+            else:
+                return False
+
     def Verify_buy_yes(self):
         """
         验证买入YES交易是否成功完成
@@ -2195,15 +2249,15 @@ class CryptoTrader:
             # 获取历史记录文本
             history_text = history_element.text
             
-            # 构建匹配模式
-            pattern = rf"{action_type} {direction}"
+            # 构建更灵活的匹配模式: "Bought xxx Down at" 或 "Sold xxx Down at"
+            pattern = rf"{action_type}.*?{direction}"
             
             # 检查是否包含预期的交易记录
             if re.search(pattern, history_text, re.IGNORECASE):
-                self.logger.info(f"✅ 交易验证成功: {pattern}")
+                self.logger.info(f"✅ 交易验证成功: {action_type} {direction}")
                 
                 # 提取价格和金额
-                price_match = re.search(r'(\d+\.?\d*)¢', history_text)
+                price_match = re.search(r'at (\d+\.?\d*)¢', history_text)
                 amount_match = re.search(r'\$(\d+\.?\d*)', history_text)
                 
                 price = float(price_match.group(1)) if price_match else 0
@@ -2211,7 +2265,8 @@ class CryptoTrader:
                 
                 return True, price, amount
             else:
-                self.logger.warning(f"❌ 交易验证失败: 未找到 {pattern}")
+                self.logger.warning(f"❌ 交易验证失败: 未找到 {action_type} {direction}")
+                self.logger.warning(f"历史记录文本: {history_text}")
                 return False, 0, 0
                 
         except Exception as e:
