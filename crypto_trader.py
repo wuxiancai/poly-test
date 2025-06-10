@@ -105,7 +105,9 @@ class CryptoTrader:
         self.login_running = False
         self.start_login_monitoring_running = False
         self.url_monitoring_running = False
+        self.url_monitoring_disabled = False  # 是否禁用URL监控的标志
         self.refresh_page_running = False
+        self.refresh_page_disabled = False  # 是否禁用页面刷新的标志
         self.is_restarting = False  # 重启状态标志
         
         # 重试策略配置
@@ -922,7 +924,7 @@ class CryptoTrader:
         self.login_check_timer = self.root.after(2000, self.start_login_monitoring)
 
         # 启动URL监控
-        self.url_check_timer = self.root.after(10000, self.start_url_monitoring)
+        self.url_check_timer = self.root.after(10000, self.enable_url_monitoring)
 
         # 启动零点 CASH 监控
         self.get_zero_time_cash_timer = self.root.after(12000, self.get_zero_time_cash)
@@ -940,7 +942,7 @@ class CryptoTrader:
         self.schedule_auto_find_coin_timer = self.root.after(30000, self.schedule_auto_find_coin)
 
         # 启动页面刷新
-        self.refresh_page_timer = self.root.after(40000, self.refresh_page)
+        self.refresh_page_timer = self.root.after(40000, self.enable_refresh_page)
         self.logger.info("\033[34m✅ 启动页面刷新成功!\033[0m")
         
         # 启动 XPath 监控
@@ -1224,8 +1226,8 @@ class CryptoTrader:
             # 重启关键监控功能
             monitors = [
                 ('login_check_timer', self.start_login_monitoring),
-                ('url_check_timer', self.start_url_monitoring),
-                ('refresh_page_timer', self.refresh_page),
+                ('url_check_timer', self.enable_url_monitoring),
+                ('refresh_page_timer', self.enable_refresh_page),
                 ('monitor_xpath_timer', self.monitor_xpath_elements),
                 ('comparison_binance_price_timer', self.comparison_binance_price),
                 ('schedule_auto_find_coin_timer', self.schedule_auto_find_coin)
@@ -2316,8 +2318,8 @@ class CryptoTrader:
         """自动找币"""
         self.logger.info("✅ 开始自动找币")
         try:
-            self.stop_url_monitoring()
-            self.stop_refresh_page()
+            self.stop_url_monitoring(should_reset=True)
+            self.stop_refresh_page(should_reset=True)
             # 保存原始窗口句柄，确保在整个过程中有一个稳定的引用
             self.original_window = self.driver.current_window_handle
             
@@ -2349,7 +2351,7 @@ class CryptoTrader:
                     self.logger.error(f"处理{coin}时出错: {str(e)}")
                     save_new_url(new_url)
 
-            self.start_url_monitoring()
+            self.enable_url_monitoring()
             self.refresh_page()
             
         except Exception as e:
@@ -2458,7 +2460,7 @@ class CryptoTrader:
                         self.driver.close()
                         self.driver.switch_to.window(target_url_window)
 
-                        self.start_url_monitoring()
+                        self.enable_url_monitoring()
                         self.refresh_page()
 
                     else:
@@ -3625,7 +3627,7 @@ class CryptoTrader:
                 login_button = self.driver.find_element(By.XPATH, XPathConfig.LOGIN_BUTTON[0])
                 if login_button:
                     self.logger.info("发现登录按钮，尝试登录")
-                    self.stop_url_monitoring()
+                    self.stop_url_monitoring(should_reset=True)
                     self.stop_refresh_page()
 
                     login_button.click()
@@ -3637,12 +3639,12 @@ class CryptoTrader:
                         google_login_button.click()
                         self.logger.info("已点击Google登录按钮")
                         
-                    # 等待10秒，让用户手动登录
-                    WebDriverWait(self.driver, 30).until(
-                        lambda driver: driver.execute_script('return document.readyState') == 'complete'
-                    )
-                    self.url_check_timer = self.root.after(15000, self.start_url_monitoring)
-                    self.refresh_page_timer = self.root.after(240000, self.refresh_page)
+                        # 等待10秒，让用户手动登录
+                        WebDriverWait(self.driver, 30).until(
+                            lambda driver: driver.execute_script('return document.readyState') == 'complete'
+                        )
+                        self.url_check_timer = self.root.after(15000, self.enable_url_monitoring)
+                        self.refresh_page_timer = self.root.after(240000, self.enable_refresh_page)
              
             except NoSuchElementException:
                 # 未找到登录按钮，可能已经登录
@@ -3669,6 +3671,10 @@ class CryptoTrader:
     def start_url_monitoring(self):
         """监控URL变化"""
         try:
+            # 检查是否已禁用URL监控
+            if hasattr(self, 'url_monitoring_disabled') and self.url_monitoring_disabled:
+                return
+                
             with self.url_monitoring_lock:
                 if self.url_monitoring_running:
                     return
@@ -3693,20 +3699,44 @@ class CryptoTrader:
         finally:
             with self.url_monitoring_lock:
                 self.url_monitoring_running = False
-            
+        
+        # 检查是否已禁用URL监控,如果禁用则不再安排下一次检查
+        if not hasattr(self, 'url_monitoring_disabled') or not self.url_monitoring_disabled:
             # 每5秒检查一次URL
             self.url_check_timer = self.root.after(5000, self.start_url_monitoring)
 
-    def stop_url_monitoring(self):
-        """停止URL监控"""
-        if self.url_check_timer:
-            self.root.after_cancel(self.url_check_timer)
-            self.url_check_timer = None
-            self.logger.info("已停止URL监控")
+    def stop_url_monitoring(self, should_reset=False):
+        """停止URL监控
+        
+        Args:
+            should_reset: 是否彻底禁用URL监控(True=禁用后不会被自动重启)
+        """
+        try:
+            # 取消定时器
+            if self.url_check_timer:
+                self.root.after_cancel(self.url_check_timer)
+                self.url_check_timer = None
+                
+            # 重置运行标志
+            with self.url_monitoring_lock:
+                self.url_monitoring_running = False
+                
+            # 完全禁用URL监控(不会被其他线程或定时器自动重启)
+            if should_reset:
+                self.url_monitoring_disabled = True
+                self.logger.info("已完全禁用URL监控(不会自动重启)")
+            else:
+                self.logger.info("已停止URL监控")
+        except Exception as e:
+            self.logger.error(f"停止URL监控失败: {str(e)}")
 
     def refresh_page(self):
         """定期刷新页面"""
         try:
+            # 检查是否已禁用页面刷新
+            if hasattr(self, 'refresh_page_disabled') and self.refresh_page_disabled:
+                return
+                
             with self.refresh_page_lock:
                 if self.refresh_page_running:
                     return
@@ -3728,15 +3758,35 @@ class CryptoTrader:
             with self.refresh_page_lock:
                 self.refresh_page_running = False
             
-            # 随机 2-5分钟刷新一次页面
-            self.refresh_page_timer = self.root.after(random.randint(120000, 300000), self.refresh_page)
+            # 检查是否已禁用页面刷新,如果禁用则不再安排下一次刷新
+            if not hasattr(self, 'refresh_page_disabled') or not self.refresh_page_disabled:
+                # 随机 2-5分钟刷新一次页面
+                self.refresh_page_timer = self.root.after(random.randint(120000, 300000), self.refresh_page)
 
-    def stop_refresh_page(self):
-        """停止页面刷新"""
-        if self.refresh_page_timer:
-            self.root.after_cancel(self.refresh_page_timer)
-            self.refresh_page_timer = None
-            self.logger.info("已停止页面刷新")
+    def stop_refresh_page(self, should_reset=False):
+        """停止页面刷新
+        
+        Args:
+            should_reset: 是否彻底禁用页面刷新(True=禁用后不会被自动重启)
+        """
+        try:
+            # 取消定时器
+            if self.refresh_page_timer:
+                self.root.after_cancel(self.refresh_page_timer)
+                self.refresh_page_timer = None
+                
+            # 重置运行标志
+            with self.refresh_page_lock:
+                self.refresh_page_running = False
+                
+            # 完全禁用页面刷新(不会被其他线程或定时器自动重启)
+            if should_reset:
+                self.refresh_page_disabled = True
+                self.logger.info("已完全禁用页面刷新(不会自动重启)")
+            else:
+                self.logger.info("已停止页面刷新")
+        except Exception as e:
+            self.logger.error(f"停止页面刷新失败: {str(e)}")
 
     def check_balance(self):
         """检查账户余额"""
@@ -3863,6 +3913,30 @@ class CryptoTrader:
         except Exception as e:
             self.logger.error(f"交易验证失败: {str(e)}")
             return False, 0, 0
+
+    def enable_url_monitoring(self):
+        """启用URL监控"""
+        try:
+            # 重置禁用标志
+            self.url_monitoring_disabled = False
+            
+            # 启动URL监控
+            self.start_url_monitoring()
+            self.logger.info("已重新启用URL监控")
+        except Exception as e:
+            self.logger.error(f"启用URL监控失败: {str(e)}")
+
+    def enable_refresh_page(self):
+        """启用页面刷新"""
+        try:
+            # 重置禁用标志
+            self.refresh_page_disabled = False
+            
+            # 启动页面刷新
+            self.refresh_page()
+            self.logger.info("已重新启用页面刷新")
+        except Exception as e:
+            self.logger.error(f"启用页面刷新失败: {str(e)}")
 
 if __name__ == "__main__":
     try:
