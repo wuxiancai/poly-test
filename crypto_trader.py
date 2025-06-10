@@ -248,13 +248,13 @@ class CryptoTrader:
                 try:
                     target_price = float(entries[0].get().strip() or '0') if entries else 0
                 except ValueError:
-                    self.logger.error("价格转换失败，使用默认值0")
+                    self.logger.error("价格转换失败,使用默认值0")
                     target_price = 0
 
                 try:
                     amount = float(amount_entries[0].get().strip() or '0') if amount_entries else 0
                 except ValueError:
-                    self.logger.error("金额转换失败，使用默认值0")
+                    self.logger.error("金额转换失败,使用默认值0")
                     amount = 0
 
                 # 更新配置
@@ -354,43 +354,36 @@ class CryptoTrader:
         
         # 根据系统设置字体
         if platform.system() == 'Darwin':
-            small_font = ('SF Pro Display', 10, 'normal')
+            small_font = ('SF Pro Display', 8, 'normal')
             base_font = ('SF Pro Display', 12, 'normal')
             bold_font = ('SF Pro Display', 12, 'bold')
             large_font = ('SF Pro Display', 14, 'normal')
-            title_font = ('SF Pro Display', 14, 'bold')
+            
         else:  # Linux and others
             # 使用Ubuntu LXDE更常见的字体
-            small_font = ('Ubuntu', 9, 'normal')
+            small_font = ('Ubuntu', 8, 'normal')
             base_font = ('Ubuntu', 10, 'normal')
             bold_font = ('Ubuntu', 10, 'bold')
             large_font = ('Ubuntu', 12, 'normal')
-            title_font = ('Ubuntu', 12, 'bold')
+            
             # 尝试加载字体，如果失败则回退到通用字体
             try:
                 self.root.tk.call('tk', 'fontchooser', 'configure', '-font', 'Ubuntu')
             except:
-                small_font = ('Sans', 9, 'normal')
+                small_font = ('Sans', 8, 'normal')
                 base_font = ('Sans', 10, 'normal')
                 bold_font = ('Sans', 10, 'bold')
                 large_font = ('Sans', 12, 'normal')
-                title_font = ('Sans', 12, 'bold')
         
         # 配置样式
         styles_config = {
-            'Red.TButton': {'foreground': '#dc3545', 'font': bold_font},
-            'Black.TButton': {'foreground': '#212529', 'font': base_font},
-            'Blue.TButton': {'foreground': '#0d6efd', 'font': base_font},
-            'Red.TEntry': {'foreground': '#dc3545', 'font': base_font},
-            'Blue.TLabel': {'foreground': '#0d6efd', 'font': large_font},
-            'Red.TLabel': {'foreground': '#dc3545', 'font': large_font},
-            'Black.TLabel': {'foreground': '#212529', 'font': base_font},
-            'Top.TLabel': {'foreground': '#212529', 'font': base_font},
-            'Warning.TLabelframe': {'font': title_font, 'foreground': '#FF0000'},
-            'LeftAligned.TButton': {'anchor': 'w', 'foreground': '#212529', 'padding': (1, 1)},
-            'Red.TLabelframe.Label': {'foreground': '#dc3545'},
-            'LeftBlack.TButton': {'foreground': '#212529', 'font': base_font},
-            'Black.TLabelframe': {'font': small_font, 'foreground': '#212529'}
+            'Red.TButton': {'foreground': '#dc3545', 'font': bold_font}, # 开始按键在用
+            'Blue.TButton': {'foreground': '#0d6efd', 'font': small_font}, # 开始按键在用
+            'Black.TButton': {'foreground': '#212529', 'font': small_font}, # 交易按键在用
+            'Red.TLabel': {'foreground': '#dc3545', 'font': large_font}, # CASH 和 RESET 在用
+            'Black.TLabel': {'foreground': '#212529', 'font': base_font}, # 很多区域在用
+            'Warning.TLabelframe': {'font': bold_font, 'foreground': '#FF0000'}, # 警告区域在用
+            'Black.TLabelframe': {'font': small_font, 'foreground': '#212529'} # 黑底白字,按键区域在用
         }
         
         for style_name, config in styles_config.items():
@@ -461,8 +454,8 @@ class CryptoTrader:
             item_frame = ttk.Frame(amount_frame)
             item_frame.pack(side=tk.LEFT, padx=2)
             
-            ttk.Label(item_frame, text=label_text, style='Top.TLabel').pack(side=tk.LEFT, padx=(0, 2))
-            entry = ttk.Entry(item_frame, width=width, font=base_font)
+            ttk.Label(item_frame, text=label_text).pack(side=tk.LEFT, padx=(0, 2))
+            entry = ttk.Entry(item_frame, width=width, font=small_font)
             entry.pack(side=tk.LEFT)
             entry.insert(0, str(default_value))
             setattr(self, entry_attr, entry)
@@ -471,8 +464,8 @@ class CryptoTrader:
         double_frame = ttk.Frame(amount_frame)
         double_frame.pack(side=tk.LEFT, padx=2)
         
-        ttk.Label(double_frame, text="DB", style='Top.TLabel').pack(side=tk.LEFT, padx=(0, 2))
-        self.doubling_entry = ttk.Entry(double_frame, width=3)
+        ttk.Label(double_frame, text="DB").pack(side=tk.LEFT, padx=(0, 2))
+        self.doubling_entry = ttk.Entry(double_frame, font=small_font, width=3)
         self.doubling_entry.pack(side=tk.LEFT)
         self.doubling_entry.insert(0, str(self.doubling))
         
@@ -488,11 +481,11 @@ class CryptoTrader:
         url_container.pack(fill="x", pady=2)
         
         ttk.Label(url_container, text="URL:", style='Black.TLabel').pack(side=tk.LEFT, padx=(0, 5))
-        self.url_entry = ttk.Combobox(url_container, font=base_font, width=40)
+        self.url_entry = ttk.Combobox(url_container, font=small_font, width=40)
         self.url_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
         # 设置URL输入框右对齐
-        self.url_entry.configure(justify='right')
+        #self.url_entry.configure(justify='left')
 
         # 从配置文件加载历史记录
         if 'url_history' not in self.config:
@@ -517,30 +510,30 @@ class CryptoTrader:
         main_controls.pack(fill="x", pady=2)
         
         # 开始按钮
-        self.start_button = ttk.Button(main_controls, text="▶ Start", 
+        self.start_button = ttk.Button(main_controls, text="▶Start", 
                                       command=self.start_monitoring, width=5,
                                       style='Blue.TButton')
         self.start_button.pack(side=tk.LEFT, padx=3)
         
         # 设置金额按钮
         self.set_amount_button = ttk.Button(main_controls, text="Set 💰", width=5,
-                                           command=self.set_yes_no_cash, style='LeftAligned.TButton')
+                                           command=self.set_yes_no_cash)
         self.set_amount_button.pack(side=tk.LEFT, padx=3)
         self.set_amount_button['state'] = 'disabled'
 
         # 币种选择
-        ttk.Label(main_controls, text="Coin:", style='Black.TLabel').pack(side=tk.LEFT, padx=(10, 2))
+        ttk.Label(main_controls, text="Coin:", font=small_font).pack(side=tk.LEFT, padx=(2, 2))
         self.coin_combobox = ttk.Combobox(main_controls, values=['BTC', 'ETH', 'SOL', 'XRP'], width=3)
         self.coin_combobox.pack(side=tk.LEFT, padx=2)
         self.coin_combobox.set('BTC')
         
         # CASH 显示
-        ttk.Label(main_controls, text="Cash:", style='Black.TLabel').pack(side=tk.LEFT, padx=(0, 2))
+        ttk.Label(main_controls, text="Cash:", font=small_font).pack(side=tk.LEFT, padx=(0, 2))
         self.zero_time_cash_label = ttk.Label(main_controls, text="0", style='Red.TLabel')
         self.zero_time_cash_label.pack(side=tk.LEFT)
 
          # 重启次数显示
-        ttk.Label(main_controls, text="Reset:", style='Black.TLabel').pack(side=tk.LEFT, padx=(10, 2))
+        ttk.Label(main_controls, text="Reset:", font=small_font).pack(side=tk.LEFT, padx=(10, 2))
         self.reset_count_label = ttk.Label(main_controls, text="0", style='Red.TLabel')
         self.reset_count_label.pack(side=tk.LEFT, padx=(0, 15))
 
@@ -573,9 +566,9 @@ class CryptoTrader:
         
         for i, (label_text, attr_name, default_value) in enumerate(price_info_items):
             item_frame = ttk.Frame(binance_container)
-            item_frame.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
+            item_frame.pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
             
-            ttk.Label(item_frame, text=label_text, style='Black.TLabel').pack(side=tk.LEFT)
+            ttk.Label(item_frame, text=label_text, font=small_font).pack(side=tk.LEFT)
             
             if attr_name == "binance_rate_display":
                 # 创建涨跌显示容器
@@ -715,7 +708,7 @@ class CryptoTrader:
             row_base = i * 2
             
             # 价格标签和输入框
-            ttk.Label(self.yes_frame, text=f"{label} Price(¢):", style='Black.TLabel').grid(
+            ttk.Label(self.yes_frame, text=f"{label} Price(¢):", font=small_font).grid(
                 row=row_base, column=0, padx=3, pady=2, sticky="w")
             price_entry = ttk.Entry(self.yes_frame, font=base_font)
             price_entry.insert(0, price_val)
@@ -724,7 +717,7 @@ class CryptoTrader:
             
             # 金额标签和输入框 - 仅为Yes1-4创建
             if amount_attr:
-                ttk.Label(self.yes_frame, text=f"{label} Amount:", style='Black.TLabel').grid(
+                ttk.Label(self.yes_frame, text=f"{label} Amount:", font=small_font).grid(
                     row=row_base+1, column=0, padx=3, pady=2, sticky="w")
                 amount_entry = ttk.Entry(self.yes_frame, font=base_font)
                 amount_entry.insert(0, amount_val if amount_val else "0")
@@ -749,7 +742,7 @@ class CryptoTrader:
             row_base = i * 2
             
             # 价格标签和输入框
-            ttk.Label(self.no_frame, text=f"{label} Price(¢):", style='Black.TLabel').grid(
+            ttk.Label(self.no_frame, text=f"{label} Price(¢):", font=small_font).grid(
                 row=row_base, column=0, padx=3, pady=2, sticky="w")
             price_entry = ttk.Entry(self.no_frame, font=base_font)
             price_entry.insert(0, price_val)
@@ -758,7 +751,7 @@ class CryptoTrader:
             
             # 金额标签和输入框 - 仅为No1-4创建
             if amount_attr:
-                ttk.Label(self.no_frame, text=f"{label} Amount:", style='Black.TLabel').grid(
+                ttk.Label(self.no_frame, text=f"{label} Amount:", font=small_font).grid(
                     row=row_base+1, column=0, padx=3, pady=2, sticky="w")
                 amount_entry = ttk.Entry(self.no_frame, font=base_font)
                 amount_entry.insert(0, amount_val if amount_val else "0")
@@ -781,7 +774,7 @@ class CryptoTrader:
             [("buy_button", "Buy", self.click_buy),
              ("buy_yes_button", "Buy-Yes", self.click_buy_yes),
              ("buy_no_button", "Buy-No", self.click_buy_no),
-             ("buy_confirm_button", "Buy-conf", self.click_buy_confirm_button)],
+             ("buy_confirm_button", "Buy-confirm", self.click_buy_confirm_button)],
             # 第二行：Yes金额按钮
             [("amount_yes1_button", "Amount-Y1", None),
              ("amount_yes2_button", "Amount-Y2", None),
@@ -802,7 +795,7 @@ class CryptoTrader:
         for row, button_row in enumerate(button_configs):
             for col, (attr_name, text, command) in enumerate(button_row):
                 if attr_name:  # 跳过占位符
-                    button = ttk.Button(trade_frame, text=text, width=self.button_width)
+                    button = ttk.Button(trade_frame, text=text, style='Black.TButton')
                     
                     if command:
                         button.configure(command=command)
@@ -823,12 +816,12 @@ class CryptoTrader:
         content_height = scrollable_frame.winfo_reqheight()
         
         # 计算并设置窗口的初始大小
-        final_width = 480 if platform.system() != 'Darwin' else 470
+        final_width = 460 if platform.system() != 'Darwin' else 460
         # 高度自适应，但有最小和最大值
         final_height = max(400, min(content_height + 20, 800))
 
         self.root.geometry(f'{final_width}x{final_height}+0+0')
-        self.root.minsize(480 if platform.system() != 'Darwin' else 470, 1050)
+        self.root.minsize(460 if platform.system() != 'Darwin' else 460, 1050)
         
         # 调整LXDE下的DPI设置以改善显示
         if platform.system() != 'Darwin':
