@@ -3819,7 +3819,7 @@ class CryptoTrader:
                 self.cash_value = float(cash_match.group(1).replace(',', ''))
             
         except Exception as e:
-            self.logger.error(f"检查余额失败: {str(e)}")
+            self.logger.info(f"检查余额失败: {str(e)}") # 不打印错误,因为余额检查失败是正常现象
 
     def check_prices(self):
         """检查价格变化"""
@@ -3865,7 +3865,7 @@ class CryptoTrader:
                 self.Sell_no(up_price, down_price, asks_shares, bids_shares)
                 
         except Exception as e:
-            self.logger.error(f"检查价格失败: {str(e)}")
+            self.logger.info(f"检查价格失败: {str(e)}") # 不打印错误,因为价格检查失败是正常现象
 
     def _verify_trade(self, action_type, direction):
         """
