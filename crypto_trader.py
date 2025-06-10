@@ -3639,33 +3639,34 @@ class CryptoTrader:
                         google_login_button.click()
                         self.logger.info("✅ 已点击Google登录按钮")
                         
-                        # 等待10秒，让用户手动登录
+                        # 等待30秒，让用户手动登录
                         WebDriverWait(self.driver, 30).until(
                             lambda driver: driver.execute_script('return document.readyState') == 'complete'
                         )
+                        
+                        # 检查是否有ACCEPT按钮（Cookie提示等）
+                        try:
+                            # 点击yes1_amount_button
+                            self.amount_yes1_button.invoke()
+                            time.sleep(0.5)
+
+                            # 点击buy_confirm_button
+                            self.buy_confirm_button.invoke()
+                            time.sleep(1)
+                            
+                            accept_button = self.driver.find_element(By.XPATH, XPathConfig.ACCEPT_BUTTON[0])
+                            if accept_button:
+                                accept_button.click()
+                                self.logger.info("✅ 已点击ACCEPT按钮")
+                                self.root.after(1000, self.driver.refresh())
+                        except NoSuchElementException:
+                            pass
+
                         self.url_check_timer = self.root.after(15000, self.enable_url_monitoring)
                         self.refresh_page_timer = self.root.after(240000, self.enable_refresh_page)
                         self.logger.info("✅ 已重新启用URL监控和页面刷新")
             except NoSuchElementException:
                 # 未找到登录按钮，可能已经登录
-                pass
-                
-            # 检查是否有ACCEPT按钮（Cookie提示等）
-            try:
-                # 点击yes1_amount_button
-                self.yes1_amount_button.invoke()
-                time.sleep(0.5)
-
-                # 点击buy_confirm_button
-                self.buy_confirm_button.invoke()
-                time.sleep(1)
-                
-                accept_button = self.driver.find_element(By.XPATH, XPathConfig.ACCEPT_BUTTON[0])
-                if accept_button:
-                    accept_button.click()
-                    self.logger.info("✅ 已点击ACCEPT按钮")
-                    self.root.after(1000, self.driver.refresh())
-            except NoSuchElementException:
                 pass
                 
         except Exception as e:
