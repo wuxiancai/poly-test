@@ -897,7 +897,7 @@ class CryptoTrader:
     def start_monitoring(self):
         """开始监控"""
         # 直接使用当前显示的网址
-        target_url = self.url_entry.get()
+        target_url = self.url_entry.get().strip()
         self.logger.info(f"\033[34m✅ 开始监控网址: {target_url}\033[0m")
         
         # 启用开始按钮，启用停止按钮
@@ -1033,7 +1033,7 @@ class CryptoTrader:
             if not self.driver and not self.is_restarting:
                 self.restart_browser(force_restart=True)
                 
-            target_url = self.url_entry.get()
+            target_url = self.url_entry.get().strip()
             
             # 使用JavaScript创建并点击链接来打开新标签页
             js_script = """
@@ -1187,7 +1187,7 @@ class CryptoTrader:
                 self.driver.execute_script("return navigator.userAgent")
                 
                 # 加载目标URL
-                target_url = self.url_entry.get()
+                target_url = self.url_entry.get().strip()
                 if target_url:
                     self.driver.get(target_url)
                     WebDriverWait(self.driver, 15).until(
@@ -3676,7 +3676,7 @@ class CryptoTrader:
                 
             # 获取当前URL
             current_url = self.driver.current_url
-            target_url = self.url_entry.get()
+            target_url = self.url_entry.get().strip()
             
             # 如果URL不匹配，重新导航
             if current_url != target_url:
