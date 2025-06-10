@@ -428,7 +428,7 @@ class CryptoTrader:
         # 金额设置框架
         amount_settings_frame = ttk.LabelFrame(
             scrollable_frame, 
-            text=get_label_text("⚠️ 娟娟细流,终入大海! 宁静致远,财富自由!", is_mac), 
+            text=get_label_text("     娟娟细流,终入大海! 宁静致远,财富自由!", is_mac), 
             padding=(10, 8), 
             style='Warning.TLabelframe'
         )
