@@ -2319,9 +2319,9 @@ class CryptoTrader:
             tuple: (是否成功, 价格, 金额)
         """
         try:
-            # 最多等待6秒钟,每0.5秒检查一次交易记录
-            max_wait_time = 6  # 最大等待时间
-            wait_interval = 0.5  # 检查间隔
+            # 最多等待15秒钟,每1秒检查一次交易记录
+            max_wait_time = 15  # 最大等待时间
+            wait_interval = 1  # 检查间隔
             end_time = time.time() + max_wait_time
             
             while time.time() < end_time:
@@ -3510,27 +3510,45 @@ class CryptoTrader:
                         google_login_button.click()
                         self.logger.info("✅ 已点击Google登录按钮")
                         
-                        # 等待15秒，让用户手动登录
-                        time.sleep(15)
-                        self.driver.get(self.url_entry.get().strip())
-                        time.sleep(2)
-                        # 检查是否有ACCEPT按钮（Cookie提示等）
-                        try:
-                            amount_button = getattr(self, 'amount_yes1_button')
-                            amount_button.event_generate('<Button-1>')
-                            time.sleep(0.5)
-
-                            # 点击buy_confirm_button
-                            self.buy_confirm_button.invoke()
-                            time.sleep(1)
+                        # 不再固定等待15秒，而是循环检测CASH值
+                        max_attempts = 15  # 最多检测15次
+                        check_interval = 2  # 每2秒检测一次
+                        cash_value = None
+                        
+                        for attempt in range(max_attempts):
+                            try:
+                                # 尝试获取CASH值
+                                cash_element = self.driver.find_element(By.XPATH, XPathConfig.CASH_VALUE[0])
+                                if cash_element:
+                                    cash_value = cash_element.text
+                                    self.logger.info(f"✅ 第{attempt+1}次尝试: 已获取CASH值: {cash_value}")
+                                    break
+                            except NoSuchElementException:
+                                self.logger.info(f"⏳ 第{attempt+1}次尝试: 等待登录完成...")
                             
-                            accept_button = self.driver.find_element(By.XPATH, XPathConfig.ACCEPT_BUTTON[0])
-                            if accept_button:
-                                accept_button.click()
-                                self.logger.info("✅ 已点击ACCEPT按钮")
-                                self.root.after(1000, self.driver.refresh())
-                        except NoSuchElementException:
-                            pass
+                            # 等待指定时间后再次检测
+                            time.sleep(check_interval)
+                        
+                        # 检查是否有ACCEPT按钮（Cookie提示等）
+                        if cash_value:
+                            self.driver.get(self.url_entry.get().strip())
+                            time.sleep(2)
+                            try:
+                                amount_button = getattr(self, 'amount_yes1_button')
+                                amount_button.event_generate('<Button-1>')
+                                time.sleep(0.5)
+
+                                # 点击buy_confirm_button
+                                self.buy_confirm_button.invoke()
+                                time.sleep(1)
+                                
+                                accept_button = self.driver.find_element(By.XPATH, XPathConfig.ACCEPT_BUTTON[0])
+                                if accept_button:
+                                    accept_button.click()
+                                    self.logger.info("✅ 已点击ACCEPT按钮")
+                                    self.root.after(1000, self.driver.refresh())
+                            except NoSuchElementException:
+                                pass
 
                         self.url_check_timer = self.root.after(10000, self.enable_url_monitoring)
                         self.refresh_page_timer = self.root.after(240000, self.enable_refresh_page)
