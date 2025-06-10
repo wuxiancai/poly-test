@@ -355,9 +355,9 @@ class CryptoTrader:
         # 根据系统设置字体
         if platform.system() == 'Darwin':
             small_font = ('SF Pro Display', 8, 'normal')
-            base_font = ('SF Pro Display', 12, 'normal')
-            bold_font = ('SF Pro Display', 12, 'bold')
-            large_font = ('SF Pro Display', 14, 'normal')
+            base_font = ('SF Pro Display', 10, 'normal')
+            bold_font = ('SF Pro Display', 10, 'bold')
+            large_font = ('SF Pro Display', 12, 'normal')
             
         else:  # Linux and others
             # 使用Ubuntu LXDE更常见的字体
@@ -377,7 +377,7 @@ class CryptoTrader:
         
         # 配置样式
         styles_config = {
-            'Red.TButton': {'foreground': '#dc3545', 'font': bold_font}, # 开始按键在用
+            'Red.TButton': {'foreground': '#dc3545', 'font': base_font}, # 开始按键在用
             'Blue.TButton': {'foreground': '#0d6efd', 'font': small_font}, # 开始按键在用
             'Black.TButton': {'foreground': '#212529', 'font': small_font}, # 交易按键在用
             'Red.TLabel': {'foreground': '#dc3545', 'font': large_font}, # CASH 和 RESET 在用
@@ -510,13 +510,13 @@ class CryptoTrader:
         main_controls.pack(fill="x", pady=2)
         
         # 开始按钮
-        self.start_button = ttk.Button(main_controls, text="▶Start", 
-                                      command=self.start_monitoring, width=5,
+        self.start_button = ttk.Button(main_controls, text="Start", 
+                                      command=self.start_monitoring, width=4,
                                       style='Blue.TButton')
         self.start_button.pack(side=tk.LEFT, padx=3)
         
         # 设置金额按钮
-        self.set_amount_button = ttk.Button(main_controls, text="Set 💰", width=5,
+        self.set_amount_button = ttk.Button(main_controls, text="Amount", width=5,
                                            command=self.set_yes_no_cash)
         self.set_amount_button.pack(side=tk.LEFT, padx=3)
         self.set_amount_button['state'] = 'disabled'
@@ -529,13 +529,13 @@ class CryptoTrader:
         
         # CASH 显示
         ttk.Label(main_controls, text="Cash:", font=small_font).pack(side=tk.LEFT, padx=(0, 2))
-        self.zero_time_cash_label = ttk.Label(main_controls, text="0", style='Red.TLabel')
+        self.zero_time_cash_label = ttk.Label(main_controls, text="0", font=base_font, style='Red.TLabel')
         self.zero_time_cash_label.pack(side=tk.LEFT)
 
          # 重启次数显示
-        ttk.Label(main_controls, text="Reset:", font=small_font).pack(side=tk.LEFT, padx=(10, 2))
+        ttk.Label(main_controls, text="Reset:", font=small_font).pack(side=tk.LEFT, padx=(2, 2))
         self.reset_count_label = ttk.Label(main_controls, text="0", style='Red.TLabel')
-        self.reset_count_label.pack(side=tk.LEFT, padx=(0, 15))
+        self.reset_count_label.pack(side=tk.LEFT, padx=(0, 2))
 
         # 交易信息显示区域
         trading_info_frame = ttk.LabelFrame(
@@ -816,12 +816,12 @@ class CryptoTrader:
         content_height = scrollable_frame.winfo_reqheight()
         
         # 计算并设置窗口的初始大小
-        final_width = 460 if platform.system() != 'Darwin' else 460
+        final_width = 470 if platform.system() != 'Darwin' else 470
         # 高度自适应，但有最小和最大值
         final_height = max(400, min(content_height + 20, 800))
 
         self.root.geometry(f'{final_width}x{final_height}+0+0')
-        self.root.minsize(460 if platform.system() != 'Darwin' else 460, 1050)
+        self.root.minsize(470 if platform.system() != 'Darwin' else 470, 1050)
         
         # 调整LXDE下的DPI设置以改善显示
         if platform.system() != 'Darwin':
