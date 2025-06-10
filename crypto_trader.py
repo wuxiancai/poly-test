@@ -3637,11 +3637,13 @@ class CryptoTrader:
                         google_login_button.click()
                         self.logger.info("已点击Google登录按钮")
                         
-                        # 等待10秒，让用户手动登录
-                        WebDriverWait(self.driver, 30).until(
-                            lambda driver: driver.execute_script('return document.readyState') == 'complete'
-                        )
-                        
+                    # 等待10秒，让用户手动登录
+                    WebDriverWait(self.driver, 30).until(
+                        lambda driver: driver.execute_script('return document.readyState') == 'complete'
+                    )
+                    self.url_check_timer = self.root.after(1000, self.start_url_monitoring)
+                    self.refresh_page_timer = self.root.after(1000, self.refresh_page)
+             
             except NoSuchElementException:
                 # 未找到登录按钮，可能已经登录
                 pass
@@ -3658,9 +3660,6 @@ class CryptoTrader:
         except Exception as e:
             self.logger.error(f"登录监控失败: {str(e)}")
         finally:
-            self.url_check_timer = self.start_url_monitoring()
-            self.refresh_page_timer = self.start_refresh_page()
-            
             with self.login_attempt_lock:
                 self.login_running = False
             
