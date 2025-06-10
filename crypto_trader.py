@@ -919,7 +919,7 @@ class CryptoTrader:
         self.set_amount_button['state'] = 'normal'
 
         # 检查是否登录
-        self.login_check_timer = self.root.after(6000, self.start_login_monitoring)
+        self.login_check_timer = self.root.after(2000, self.start_login_monitoring)
 
         # 启动URL监控
         self.url_check_timer = self.root.after(10000, self.start_url_monitoring)
