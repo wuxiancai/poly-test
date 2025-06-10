@@ -3639,12 +3639,12 @@ class CryptoTrader:
                         google_login_button.click()
                         self.logger.info("✅ 已点击Google登录按钮")
                         
-                        # 等待30秒，让用户手动登录
+                        # 等待15秒，让用户手动登录
                         time.sleep(15)
-                        self.driver.get(self.url_entry.get().strip())
-                        
+                        self.url_check_timer = self.root.after(0, self.enable_url_monitoring)
                         # 检查是否有ACCEPT按钮（Cookie提示等）
                         try:
+                            time.sleep(2)
                             # 点击yes1_amount_button
                             self.amount_yes1_button.invoke()
                             time.sleep(0.5)
@@ -3661,7 +3661,7 @@ class CryptoTrader:
                         except NoSuchElementException:
                             pass
 
-                        self.url_check_timer = self.root.after(15000, self.enable_url_monitoring)
+                        
                         self.refresh_page_timer = self.root.after(240000, self.enable_refresh_page)
                         self.logger.info("✅ 已重新启用URL监控和页面刷新")
             except NoSuchElementException:
