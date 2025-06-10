@@ -30,6 +30,7 @@ import socket
 import sys
 import websocket
 from xpath_config import XPathConfig
+import random
 
 
 
@@ -2536,7 +2537,7 @@ class CryptoTrader:
             self.click_today_card()
 
     def get_zero_time_cash(self):
-        """获取币安BTC实时价格,并在中国时区00:00触发"""
+        """获取币安实时价格,并在中国时区00:00触发"""
         try:
             # 零点获取 CASH 的值
             try:
@@ -3638,14 +3639,14 @@ class CryptoTrader:
                         
             except NoSuchElementException:
                 # 未找到登录按钮，可能已经登录
-                self.logger.info("未找到登录按钮，可能已经登录")
+                self.logger.info("未找到登录按钮，已经登录")
                 
-            # 检查是否有接受按钮（Cookie提示等）
+            # 检查是否有ACCEPT按钮（Cookie提示等）
             try:
                 accept_button = self.driver.find_element(By.XPATH, XPathConfig.ACCEPT_BUTTON[0])
                 if accept_button:
                     accept_button.click()
-                    self.logger.info("已点击接受按钮")
+                    self.logger.info("已点击ACCEPT按钮")
             except NoSuchElementException:
                 pass
                 
@@ -3655,8 +3656,8 @@ class CryptoTrader:
             with self.login_attempt_lock:
                 self.login_running = False
             
-            # 每10分钟检查一次登录状态
-            self.login_check_timer = self.root.after(600000, self.start_login_monitoring)
+            # 每10秒检查一次登录状态
+            self.login_check_timer = self.root.after(10000, self.start_login_monitoring)
 
     def start_url_monitoring(self):
         """监控URL变化"""
@@ -3672,7 +3673,7 @@ class CryptoTrader:
             
             # 如果URL不匹配，重新导航
             if current_url != target_url:
-                self.logger.info(f"URL不匹配，重新导航到: {target_url}")
+                self.logger.info(f"URL不匹配,重新导航到: {target_url}")
                 self.driver.get(target_url)
                 
                 # 等待页面加载完成
@@ -3686,8 +3687,8 @@ class CryptoTrader:
             with self.url_monitoring_lock:
                 self.url_monitoring_running = False
             
-            # 每5分钟检查一次URL
-            self.url_check_timer = self.root.after(300000, self.start_url_monitoring)
+            # 每5秒检查一次URL
+            self.url_check_timer = self.root.after(5000, self.start_url_monitoring)
 
     def stop_url_monitoring(self):
         """停止URL监控"""
@@ -3720,8 +3721,8 @@ class CryptoTrader:
             with self.refresh_page_lock:
                 self.refresh_page_running = False
             
-            # 每30分钟刷新一次页面
-            self.refresh_page_timer = self.root.after(1800000, self.refresh_page)
+            # 随机 2-5分钟刷新一次页面
+            self.refresh_page_timer = self.root.after(random.randint(120000, 300000), self.refresh_page)
 
     def stop_refresh_page(self):
         """停止页面刷新"""
