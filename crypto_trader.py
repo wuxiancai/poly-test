@@ -2558,7 +2558,7 @@ class CryptoTrader:
             # 移除逗号并转换为浮点数
             self.zero_time_cash_value = round(float(cash_match.group(1).replace(',', '')), 2)
             self.zero_time_cash_label.config(text=f"{self.zero_time_cash_value}")
-            self.logger.info(f"✅ 获取到原始CASH值:\033[34m${self.zero_time_cash_value}\033[0m")
+            self.logger.info(f"✅ 已获取到原始CASH值:\033[34m${self.zero_time_cash_value}\033[0m")
 
             # 设置 YES/NO 金额,延迟2秒确保数据稳定
             self.root.after(2000, self.schedule_update_amount)
@@ -3626,7 +3626,7 @@ class CryptoTrader:
                 # 查找登录按钮
                 login_button = self.driver.find_element(By.XPATH, XPathConfig.LOGIN_BUTTON[0])
                 if login_button:
-                    self.logger.info("✅ 发现登录按钮，尝试登录")
+                    self.logger.info("✅ 已发现登录按钮,尝试登录")
                     self.stop_url_monitoring(should_reset=True)
                     self.stop_refresh_page()
 
@@ -3661,7 +3661,7 @@ class CryptoTrader:
                         except NoSuchElementException:
                             pass
 
-                        
+                        self.url_check_timer = self.root.after(10000, self.enable_url_monitoring)
                         self.refresh_page_timer = self.root.after(240000, self.enable_refresh_page)
                         self.logger.info("✅ 已重新启用URL监控和页面刷新")
             except NoSuchElementException:
@@ -3835,7 +3835,7 @@ class CryptoTrader:
                 self.cash_value = float(cash_match.group(1).replace(',', ''))
             
         except Exception as e:
-            self.logger.info(f"❌ 检查余额失败") # 不打印错误,因为余额检查失败是正常现象
+            pass
 
     def check_prices(self):
         """检查价格变化"""
@@ -3881,7 +3881,7 @@ class CryptoTrader:
                 self.Sell_no(up_price, down_price, asks_shares, bids_shares)
                 
         except Exception as e:
-            self.logger.info(f"❌ 检查价格失败") # 不打印错误,因为价格检查失败是正常现象
+            pass
 
     def _verify_trade(self, action_type, direction):
         """
