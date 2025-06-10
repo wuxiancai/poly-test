@@ -3684,8 +3684,15 @@ class CryptoTrader:
             current_url = self.driver.current_url
             target_url = self.url_entry.get().strip()
             
-            # 如果URL不匹配，重新导航
-            if current_url != target_url:
+            # 去除URL中的查询参数(?后面的部分)
+            def clean_url(url):
+                return url.split('?')[0].rstrip('/')
+                
+            clean_current = clean_url(current_url)
+            clean_target = clean_url(target_url)
+            
+            # 如果URL基础部分不匹配，重新导航
+            if clean_current != clean_target:
                 self.logger.info(f"URL不匹配,重新导航到: {target_url}")
                 self.driver.get(target_url)
                 
