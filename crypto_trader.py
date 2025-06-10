@@ -3640,9 +3640,7 @@ class CryptoTrader:
                         self.logger.info("✅ 已点击Google登录按钮")
                         
                         # 等待30秒，让用户手动登录
-                        WebDriverWait(self.driver, 30).until(
-                            lambda driver: driver.execute_script('return document.readyState') == 'complete'
-                        )
+                        time.sleep(15)
                         
                         # 检查是否有ACCEPT按钮（Cookie提示等）
                         try:
