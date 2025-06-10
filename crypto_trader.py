@@ -3641,8 +3641,8 @@ class CryptoTrader:
                     WebDriverWait(self.driver, 30).until(
                         lambda driver: driver.execute_script('return document.readyState') == 'complete'
                     )
-                    self.url_check_timer = self.root.after(1000, self.start_url_monitoring)
-                    self.refresh_page_timer = self.root.after(1000, self.refresh_page)
+                    self.url_check_timer = self.root.after(15000, self.start_url_monitoring)
+                    self.refresh_page_timer = self.root.after(240000, self.refresh_page)
              
             except NoSuchElementException:
                 # 未找到登录按钮，可能已经登录
