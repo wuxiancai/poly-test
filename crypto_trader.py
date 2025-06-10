@@ -1979,36 +1979,58 @@ class CryptoTrader:
         """
         self.logger.info("✅ 执行only_sell_yes")
 
-        # 调用卖出按钮
-        self.position_sell_yes_button.invoke()
-        time.sleep(0.5)  # 必要的延迟，确保按钮点击生效
-        self.sell_confirm_button.invoke()
-        
-        # 等待交易完成
-        time.sleep(2)
-        
-        # 验证交易
-        if self._verify_trade('Sold', 'Up')[0]:
-            # 增加卖出计数
-            self.sell_count += 1
+        # 交易前禁用页面刷新
+        original_refresh_disabled = getattr(self, 'refresh_page_disabled', False)
+        self.stop_refresh_page(should_reset=True)
+
+        try:
+            # 调用卖出按钮
+            self.position_sell_yes_button.invoke()
+            time.sleep(0.5)  # 必要的延迟，确保按钮点击生效
+            self.sell_confirm_button.invoke()
             
-            # 发送交易邮件 - 卖出YES
-            self.send_trade_email(
-                trade_type="Sell Up",
-                price=self.sell_up_price,
-                amount=self.position_yes_cash(),  # 卖出时金额为总持仓
-                trade_count=self.sell_count,
-                cash_value=self.cash_value,
-                portfolio_value=self.portfolio_value
-            )
-            return True
-        else:
+            # 等待交易完成
+            time.sleep(2)
+            
+            # 验证交易
+            if self._verify_trade('Sold', 'Up')[0]:
+                # 增加卖出计数
+                self.sell_count += 1
+                
+                # 发送交易邮件 - 卖出YES
+                self.send_trade_email(
+                    trade_type="Sell Up",
+                    price=self.sell_up_price,
+                    amount=self.position_yes_cash(),  # 卖出时金额为总持仓
+                    trade_count=self.sell_count,
+                    cash_value=self.cash_value,
+                    portfolio_value=self.portfolio_value
+                )
+                
+                # 交易完成后,恢复原来的页面刷新状态
+                if not original_refresh_disabled:
+                    self.refresh_page_disabled = False
+                return True
+            else:
+                if retry_count > 0:
+                    self.logger.warning(f"❌ 卖出only_sell_yes验证失败,重试 (剩余{retry_count}次)")
+                    time.sleep(1)
+                    return self.only_sell_yes(retry_count - 1)
+                else:
+                    self.logger.error("❌ 卖出only_sell_yes达到最大重试次数,放弃")
+                    # 交易失败后,恢复原来的页面刷新状态
+                    if not original_refresh_disabled:
+                        self.refresh_page_disabled = False
+                    return False
+        except Exception as e:
+            self.logger.error(f"❌ only_sell_yes执行失败: {str(e)}")
+            # 出现异常时也恢复原来的页面刷新状态
+            if not original_refresh_disabled:
+                self.refresh_page_disabled = False
             if retry_count > 0:
-                self.logger.warning(f"❌ 卖出only_sell_yes验证失败,重试 (剩余{retry_count}次)")
                 time.sleep(1)
                 return self.only_sell_yes(retry_count - 1)
             else:
-                self.logger.error("❌ 卖出only_sell_yes达到最大重试次数,放弃")
                 return False
         
     def only_sell_no(self, retry_count=3):
@@ -2019,36 +2041,58 @@ class CryptoTrader:
         """
         self.logger.info("✅ 执行only_sell_no")
         
-        # 调用卖出按钮
-        self.position_sell_no_button.invoke()
-        time.sleep(0.5)  # 必要的延迟，确保按钮点击生效
-        self.sell_confirm_button.invoke()
+        # 交易前禁用页面刷新
+        original_refresh_disabled = getattr(self, 'refresh_page_disabled', False)
+        self.stop_refresh_page(should_reset=True)
         
-        # 等待交易完成
-        time.sleep(2)
-        
-        # 验证交易
-        if self._verify_trade('Sold', 'Down')[0]:
-            # 增加卖出计数
-            self.sell_count += 1
+        try:
+            # 调用卖出按钮
+            self.position_sell_no_button.invoke()
+            time.sleep(0.5)  # 必要的延迟，确保按钮点击生效
+            self.sell_confirm_button.invoke()
             
-            # 发送交易邮件 - 卖出NO
-            self.send_trade_email(
-                trade_type="Sell Down",
-                price=self.sell_down_price,
-                amount=self.position_no_cash(),  # 卖出时金额为总持仓
-                trade_count=self.sell_count,
-                cash_value=self.cash_value,
-                portfolio_value=self.portfolio_value
-            )
-            return True
-        else:
+            # 等待交易完成
+            time.sleep(2)
+            
+            # 验证交易
+            if self._verify_trade('Sold', 'Down')[0]:
+                # 增加卖出计数
+                self.sell_count += 1
+                
+                # 发送交易邮件 - 卖出NO
+                self.send_trade_email(
+                    trade_type="Sell Down",
+                    price=self.sell_down_price,
+                    amount=self.position_no_cash(),  # 卖出时金额为总持仓
+                    trade_count=self.sell_count,
+                    cash_value=self.cash_value,
+                    portfolio_value=self.portfolio_value
+                )
+                
+                # 交易完成后,恢复原来的页面刷新状态
+                if not original_refresh_disabled:
+                    self.refresh_page_disabled = False
+                return True
+            else:
+                if retry_count > 0:
+                    self.logger.warning(f"❌ 卖出only_sell_no验证失败,重试 (剩余{retry_count}次)")
+                    time.sleep(1)
+                    return self.only_sell_no(retry_count - 1)
+                else:
+                    self.logger.error("❌ 卖出only_sell_no达到最大重试次数,放弃")
+                    # 交易失败后,恢复原来的页面刷新状态
+                    if not original_refresh_disabled:
+                        self.refresh_page_disabled = False
+                    return False
+        except Exception as e:
+            self.logger.error(f"❌ only_sell_no执行失败: {str(e)}")
+            # 出现异常时也恢复原来的页面刷新状态
+            if not original_refresh_disabled:
+                self.refresh_page_disabled = False
             if retry_count > 0:
-                self.logger.warning(f"❌ 卖出only_sell_no验证失败,重试 (剩余{retry_count}次)")
                 time.sleep(1)
                 return self.only_sell_no(retry_count - 1)
             else:
-                self.logger.error("❌ 卖出only_sell_no达到最大重试次数,放弃")
                 return False
 
     def only_sell_yes3(self, retry_count=3):
@@ -2057,6 +2101,10 @@ class CryptoTrader:
         Args:
             retry_count: 最大重试次数
         """
+        # 交易前禁用页面刷新
+        original_refresh_disabled = getattr(self, 'refresh_page_disabled', False)
+        self.stop_refresh_page(should_reset=True)
+        
         try:
             self.logger.info("✅ 执行only_sell_yes3")
             
@@ -2071,6 +2119,9 @@ class CryptoTrader:
             shares_input = self._get_cached_element('AMOUNT_INPUT', refresh=True)
             if not shares_input:
                 self.logger.error("❌ 未找到shares输入框")
+                # 操作失败,恢复原来的页面刷新状态
+                if not original_refresh_disabled:
+                    self.refresh_page_disabled = False
                 return False
                 
             # 清除输入框并设置shares数量
@@ -2103,6 +2154,10 @@ class CryptoTrader:
                 )
                 
                 self.logger.info(f"卖出 Up 3 SHARES: {yes3_shares} 成功")
+                
+                # 交易完成后,恢复原来的页面刷新状态
+                if not original_refresh_disabled:
+                    self.refresh_page_disabled = False
                 return True
             else:
                 if retry_count > 0:
@@ -2111,10 +2166,17 @@ class CryptoTrader:
                     return self.only_sell_yes3(retry_count - 1)
                 else:
                     self.logger.error("❌ 卖出only_sell_yes3达到最大重试次数,放弃")
+                    # 交易失败后,恢复原来的页面刷新状态
+                    if not original_refresh_disabled:
+                        self.refresh_page_disabled = False
                     return False
                 
         except Exception as e:
             self.logger.error(f"❌ only_sell_yes3执行失败: {str(e)}")
+            # 出现异常时也恢复原来的页面刷新状态
+            if not original_refresh_disabled:
+                self.refresh_page_disabled = False
+                
             if retry_count > 0:
                 time.sleep(1)
                 return self.only_sell_yes3(retry_count - 1)
@@ -2127,6 +2189,10 @@ class CryptoTrader:
         Args:
             retry_count: 最大重试次数
         """
+        # 交易前禁用页面刷新
+        original_refresh_disabled = getattr(self, 'refresh_page_disabled', False)
+        self.stop_refresh_page(should_reset=True)
+        
         try:
             self.logger.info("✅ 执行only_sell_no3")
             
@@ -2141,6 +2207,9 @@ class CryptoTrader:
             shares_input = self._get_cached_element('AMOUNT_INPUT', refresh=True)
             if not shares_input:
                 self.logger.error("❌ 未找到shares输入框")
+                # 操作失败,恢复原来的页面刷新状态
+                if not original_refresh_disabled:
+                    self.refresh_page_disabled = False
                 return False
                 
             # 清除输入框并设置shares数量
@@ -2173,6 +2242,10 @@ class CryptoTrader:
                 )
                 
                 self.logger.info(f"✅ 卖出 Down 3 SHARES: {no3_shares} 成功")
+                
+                # 交易完成后,恢复原来的页面刷新状态
+                if not original_refresh_disabled:
+                    self.refresh_page_disabled = False
                 return True
             else:
                 if retry_count > 0:
@@ -2181,10 +2254,17 @@ class CryptoTrader:
                     return self.only_sell_no3(retry_count - 1)
                 else:
                     self.logger.error("❌ 卖出only_sell_no3达到最大重试次数,放弃")
+                    # 交易失败后,恢复原来的页面刷新状态
+                    if not original_refresh_disabled:
+                        self.refresh_page_disabled = False
                     return False
                 
         except Exception as e:
             self.logger.error(f"❌ only_sell_no3执行失败: {str(e)}")
+            # 出现异常时也恢复原来的页面刷新状态
+            if not original_refresh_disabled:
+                self.refresh_page_disabled = False
+                
             if retry_count > 0:
                 time.sleep(1)
                 return self.only_sell_no3(retry_count - 1)
@@ -2239,35 +2319,44 @@ class CryptoTrader:
             tuple: (是否成功, 价格, 金额)
         """
         try:
-            # 等待历史记录元素出现
-            history_element = self._wait_for_element(XPathConfig.HISTORY, timeout=5)
+            # 最多等待6秒钟,每0.5秒检查一次交易记录
+            max_wait_time = 6  # 最大等待时间
+            wait_interval = 0.5  # 检查间隔
+            end_time = time.time() + max_wait_time
             
-            if not history_element:
-                self.logger.warning(f"未找到交易历史记录元素")
-                return False, 0, 0
+            while time.time() < end_time:
+                # 等待历史记录元素出现
+                history_element = self._wait_for_element(XPathConfig.HISTORY, timeout=2)
+                self.logger.info(f"尝试获取历史记录元素...")
                 
-            # 获取历史记录文本
-            history_text = history_element.text
+                if history_element:
+                    # 获取历史记录文本
+                    history_text = history_element.text
+                    self.logger.info(f"历史记录文本: {history_text}")
+                    
+                    # 构建更灵活的匹配模式: "Bought xxx Down at" 或 "Sold xxx Down at"
+                    pattern = rf"{action_type}.*?{direction}"
+                    
+                    # 检查是否包含预期的交易记录
+                    if re.search(pattern, history_text, re.IGNORECASE):
+                        self.logger.info(f"✅ 交易验证成功: {action_type} {direction}")
+                        
+                        # 提取价格和金额
+                        price_match = re.search(r'at (\d+\.?\d*)¢', history_text)
+                        amount_match = re.search(r'\$(\d+\.?\d*)', history_text)
+                        
+                        price = float(price_match.group(1)) if price_match else 0
+                        amount = float(amount_match.group(1)) if amount_match else 0
+                        
+                        return True, price, amount
+                
+                # 等待一段时间后再次检查
+                self.logger.info(f"交易记录未出现或不匹配,等待{wait_interval}秒后重试...")
+                time.sleep(wait_interval)
             
-            # 构建更灵活的匹配模式: "Bought xxx Down at" 或 "Sold xxx Down at"
-            pattern = rf"{action_type}.*?{direction}"
-            
-            # 检查是否包含预期的交易记录
-            if re.search(pattern, history_text, re.IGNORECASE):
-                self.logger.info(f"✅ 交易验证成功: {action_type} {direction}")
-                
-                # 提取价格和金额
-                price_match = re.search(r'at (\d+\.?\d*)¢', history_text)
-                amount_match = re.search(r'\$(\d+\.?\d*)', history_text)
-                
-                price = float(price_match.group(1)) if price_match else 0
-                amount = float(amount_match.group(1)) if amount_match else 0
-                
-                return True, price, amount
-            else:
-                self.logger.warning(f"❌ 交易验证失败: 未找到 {action_type} {direction}")
-                self.logger.warning(f"历史记录文本: {history_text}")
-                return False, 0, 0
+            # 超时未找到匹配的交易记录
+            self.logger.warning(f"❌ 交易验证失败: 未找到 {action_type} {direction} (已等待{max_wait_time}秒)")
+            return False, 0, 0
                 
         except Exception as e:
             self.logger.error(f"交易验证失败: {str(e)}")
@@ -2380,6 +2469,10 @@ class CryptoTrader:
             bool: 交易是否成功
         """
         try:
+            # 交易前禁用页面刷新
+            original_refresh_disabled = getattr(self, 'refresh_page_disabled', False)
+            self.stop_refresh_page(should_reset=True)
+            
             # 获取对应的按钮
             if is_yes_direction:
                 self.buy_yes_button.invoke()
@@ -2404,6 +2497,10 @@ class CryptoTrader:
             # 验证交易结果
             success = self.Verify_buy_yes() if is_yes_direction else self.Verify_buy_no()
             
+            # 交易完成后,恢复原来的页面刷新状态
+            if not original_refresh_disabled:
+                self.refresh_page_disabled = False
+            
             if success:
                 return True
                 
@@ -2416,6 +2513,10 @@ class CryptoTrader:
             
         except Exception as e:
             self.logger.error(f"执行交易失败: {str(e)}")
+            # 出现异常时也恢复原来的页面刷新状态
+            if 'original_refresh_disabled' in locals() and not original_refresh_disabled:
+                self.refresh_page_disabled = False
+                
             if retry_count > 0:
                 time.sleep(1)
                 return self._execute_buy_trade(is_yes_direction, trade_num, retry_count - 1)
