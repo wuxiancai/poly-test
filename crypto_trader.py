@@ -3750,8 +3750,6 @@ class CryptoTrader:
                 lambda driver: driver.execute_script('return document.readyState') == 'complete'
             )
             
-            self.logger.info("页面已刷新")
-            
         except Exception as e:
             self.logger.error(f"页面刷新失败: {str(e)}")
         finally:
