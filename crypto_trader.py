@@ -1091,7 +1091,7 @@ class CryptoTrader:
 
         self._send_chrome_alert_email()
         try:
-            self.logger.info(f"正在{'重启' if force_restart else '重连'}浏览器...")
+            self.logger.info(f"🔄 正在{'重启' if force_restart else '重连'}浏览器...")
             
             # 1. 清理现有连接
             if self.driver:
@@ -1150,7 +1150,7 @@ class CryptoTrader:
                 import requests
                 response = requests.get('http://127.0.0.1:9222/json', timeout=2)
                 if response.status_code == 200:
-                    self.logger.info(f"✅ Chrome浏览器已重新启动，调试端口可用 (等待{wait_time+1}秒)")
+                    self.logger.info(f"✅ Chrome浏览器已重新启动,调试端口可用,等待{wait_time+1}秒")
                     return True
             except:
                 continue
@@ -1898,7 +1898,7 @@ class CryptoTrader:
         text = yes_element.text
         amount_match = re.search(r'\$(\d+\.?\d*)', text)  # 匹配 $数字 格式
         yes_value = float(amount_match.group(1)) if amount_match else 0
-        self.logger.info(f"当前持仓YES的金额: {yes_value}")
+        self.logger.info(f"✅ 当前持仓YES的金额: \033[32m{yes_value}\033[0m")
         return yes_value
     
     def position_no_cash(self):
@@ -1914,7 +1914,7 @@ class CryptoTrader:
         text = no_element.text
         amount_match = re.search(r'\$(\d+\.?\d*)', text)  # 匹配 $数字 格式
         no_value = float(amount_match.group(1)) if amount_match else 0
-        self.logger.info(f"当前持仓NO的金额: {no_value}")
+        self.logger.info(f"✅ 当前持仓NO的金额: \033[32m{no_value}\033[0m")
         return no_value
 
     def close_windows(self):
@@ -1966,7 +1966,7 @@ class CryptoTrader:
         self.set_yes1_no1_default_target_price()
         # 重置交易次数
         self.reset_count_label.config(text=str(self.reset_trade_count))
-        self.logger.info(f"第\033[32m{self.reset_trade_count}\033[0m次重置交易")
+        self.logger.info(f"✅ 第\033[32m{self.reset_trade_count}\033[0m次重置交易")
 
     def set_default_price(self, price):
         """设置默认目标价格"""
@@ -1976,7 +1976,7 @@ class CryptoTrader:
             self.yes1_price_entry.insert(0, str(self.default_target_price))
             self.no1_price_entry.delete(0, tk.END)
             self.no1_price_entry.insert(0, str(self.default_target_price))
-            self.logger.info(f"默认目标价格已更新为: {price}")
+            self.logger.info(f"✅ 默认目标价格已更新为: \033[32m{price}\033[0m")
         except ValueError:
             self.logger.error("价格设置无效，请输入有效数字")
 
@@ -2126,18 +2126,18 @@ class CryptoTrader:
                     position_label_up = None
                     position_label_up = self.driver.find_element(By.XPATH, XPathConfig.POSITION_UP_LABEL[0])
                     if position_label_up is not None and position_label_up:
-                        self.logger.info(f"找到了Up持仓标签: {position_label_up.text}")
+                        self.logger.info(f"✅ 找到了Up持仓标签: \033[32m{position_label_up.text}\033[0m")
                         return True
                     else:
-                        self.logger.info("USE FIND-element,未找到Up持仓标签")
+                        self.logger.info("❌ USE FIND-element,未找到Up持仓标签")
                         return False
                 except NoSuchElementException:
                     position_label_up = self._find_element_with_retry(XPathConfig.POSITION_UP_LABEL, timeout=3, silent=True)
                     if position_label_up is not None and position_label_up:
-                        self.logger.info(f"找到了Up持仓标签: {position_label_up.text}")
+                        self.logger.info(f"✅ 找到了Up持仓标签: \033[32m{position_label_up.text}\033[0m")
                         return True
                     else:
-                        self.logger.info("use with-retry,未找到Up持仓标签")
+                        self.logger.info("❌ use with-retry,未找到Up持仓标签")
                         return False
                          
             except TimeoutException:
@@ -2169,18 +2169,18 @@ class CryptoTrader:
                     position_label_down = None
                     position_label_down = self.driver.find_element(By.XPATH, XPathConfig.POSITION_DOWN_LABEL[0])
                     if position_label_down is not None and position_label_down:
-                        self.logger.info(f"use find-element,找到了Down持仓标签: {position_label_down.text}")
+                        self.logger.info(f"✅ use find-element,找到了Down持仓标签: \033[32m{position_label_down.text}\033[0m")
                         return True
                     else:
-                        self.logger.info("use find-element,未找到Down持仓标签")
+                        self.logger.info("❌ use find-element,未找到Down持仓标签")
                         return False
                 except NoSuchElementException:
                     position_label_down = self._find_element_with_retry(XPathConfig.POSITION_DOWN_LABEL, timeout=3, silent=True)
                     if position_label_down is not None and position_label_down:
-                        self.logger.info(f"use with-retry,找到了Down持仓标签: {position_label_down.text}")
+                        self.logger.info(f"✅ use with-retry,找到了Down持仓标签: \033[32m{position_label_down.text}\033[0m")
                         return True
                     else:
-                        self.logger.info("use with-retry,未找到Down持仓标签")
+                        self.logger.info("❌ use with-retry,未找到Down持仓标签")
                         return False
                                
             except TimeoutException:
@@ -2528,7 +2528,7 @@ class CryptoTrader:
                     actions = ActionChains(self.driver)
                     actions.key_down(modifier_key).click(card).key_up(modifier_key).perform()
 
-                    self.logger.info("\033[34m🆕 成功用快捷键打开新标签页！\033[0m")
+                    self.logger.info("✅ \033[34m🆕 成功用快捷键打开新标签页！\033[0m")
                     return True
 
             self.logger.warning("\033[31m❌ 没有找到包含今天日期的卡片\033[0m")
@@ -2713,7 +2713,7 @@ class CryptoTrader:
             self.logger.warning(f"WebSocket 错误: {error}")
 
         def on_close(ws, close_status_code, close_msg):
-            self.logger.info("WebSocket 连接已关闭")
+            self.logger.info("❌ WebSocket 连接已关闭")
 
         def run_ws():
             while self.running and not self.stop_event.is_set():
@@ -2777,7 +2777,7 @@ class CryptoTrader:
                 self.comparison_binance_price_timer = threading.Timer(seconds_until_next_run, self._perform_price_comparison)
                 self.comparison_binance_price_timer.daemon = True
                 self.comparison_binance_price_timer.start()
-                self.logger.info(f"\033[34m{round(seconds_until_next_run / 3600,2)}\033[0m小时后比较\033[34m{self.selected_coin}USDT\033[0m币安价格")
+                self.logger.info(f"✅ \033[34m{round(seconds_until_next_run / 3600,2)}\033[0m小时后比较\033[34m{self.selected_coin}USDT\033[0m币安价格")
 
     def First_trade(self, asks_price_raw, bids_price_raw, asks_shares, bids_shares):
         """第一次交易价格设置为 0.52 买入"""
@@ -2793,7 +2793,7 @@ class CryptoTrader:
            
             # 检查Yes1价格匹配
             if self._check_price_match(asks_price_raw, yes1_price, True, asks_shares, self.asks_shares):
-                self.logger.info(f"Up 1: {asks_price_raw}¢ 价格匹配,执行自动交易")
+                self.logger.info(f"✅ Up 1: {asks_price_raw}¢ 价格匹配,执行自动交易")
                 
                 # 执行交易
                 if self._execute_buy_trade(True, 1):
@@ -2830,7 +2830,7 @@ class CryptoTrader:
             
             # 检查No1价格匹配
             elif self._check_price_match(bids_price_raw, no1_price, False, bids_shares, self.bids_shares):
-                self.logger.info(f"Down 1: {100.0 - bids_price_raw}¢ 价格匹配,执行自动交易")
+                self.logger.info(f"✅ Down 1: {100.0 - bids_price_raw}¢ 价格匹配,执行自动交易")
                 
                 # 执行交易
                 if self._execute_buy_trade(False, 1):
@@ -2892,7 +2892,7 @@ class CryptoTrader:
             
             # 条件1: 反水卖出策略 - 价格在44-47区间，价差在-2到1之间
             if (44 <= yes5_price <= 47) and (-2 <= price_diff <= 1) and (bids_shares > self.bids_shares):
-                self.logger.info(f"Up 5: {bids_price_raw}¢ 价格匹配,执行自动卖出 (反水策略)")
+                self.logger.info(f"✅  Up 5: {bids_price_raw}¢ 价格匹配,执行自动卖出 (反水策略)")
                 
                 self.yes5_target_price = yes5_price
                 
@@ -2921,7 +2921,7 @@ class CryptoTrader:
             
             # 条件2: 正常卖出策略 - 价格>=60，价差在0到1.1之间
             elif yes5_price >= 60 and 0 <= price_diff <= 1.1 and (bids_shares > self.bids_shares):
-                self.logger.info(f"Up 5: {asks_price_raw}¢ 价格匹配,执行自动卖出 (正常策略)")
+                self.logger.info(f"✅ Up 5: {asks_price_raw}¢ 价格匹配,执行自动卖出 (正常策略)")
                 
                 self.yes5_target_price = yes5_price
                 
@@ -2972,7 +2972,7 @@ class CryptoTrader:
             
             # 条件1: 反水卖出策略 - 价格在40-47区间，价差在-2到1之间
             if (40 <= no5_price <= 47) and (-2 <= price_diff <= 1) and (bids_shares > self.bids_shares):
-                self.logger.info(f"Down 5: {100 - asks_price_raw}¢ 价格匹配,执行自动卖出 (反水策略)")
+                self.logger.info(f"✅ Down 5: {100 - asks_price_raw}¢ 价格匹配,执行自动卖出 (反水策略)")
 
                 # 先卖全部 Down
                 self.only_sell_no()
@@ -3001,7 +3001,7 @@ class CryptoTrader:
             
             # 条件2: 正常卖出策略 - 价格>=60，价差在0到1.1之间
             elif no5_price >= 60 and (0 <= price_diff <= 1.1) and (bids_shares > self.bids_shares):
-                self.logger.info(f"Down 5: {100 - asks_price_raw}¢ 价格匹配,执行自动卖出 (正常策略)")
+                self.logger.info(f"✅ Down 5: {100 - asks_price_raw}¢ 价格匹配,执行自动卖出 (正常策略)")
 
                 self.no5_target_price = no5_price
                 
@@ -3044,7 +3044,7 @@ class CryptoTrader:
         
             # 检查Yes4价格匹配
             if self._check_price_match(asks_price_raw, yes4_price, True, asks_shares, self.asks_shares):
-                self.logger.info(f"Up 4: {asks_price_raw}¢ 价格匹配,执行自动交易")
+                self.logger.info(f"✅ Up 4: {asks_price_raw}¢ 价格匹配,执行自动交易")
                 
                 # 执行交易
                 if self._execute_buy_trade(True, 4):
@@ -3081,7 +3081,7 @@ class CryptoTrader:
                     
             # 检查No4价格匹配
             elif self._check_price_match(bids_price_raw, no4_price, False, bids_shares, self.bids_shares):
-                self.logger.info(f"Down 4: {100.0 - bids_price_raw}¢ 价格匹配,执行自动交易")
+                self.logger.info(f"✅ Down 4: {100.0 - bids_price_raw}¢ 价格匹配,执行自动交易")
                 
                 # 执行交易
                 if self._execute_buy_trade(False, 4):
@@ -3263,7 +3263,7 @@ class CryptoTrader:
             
             # 检查Yes2价格匹配
             if self._check_price_match(asks_price_raw, yes2_price, True, asks_shares, self.asks_shares):
-                self.logger.info(f"Up 2: {asks_price_raw}¢ 价格匹配,执行自动交易")
+                self.logger.info(f"✅ Up 2: {asks_price_raw}¢ 价格匹配,执行自动交易")
                 
                 # 执行交易
                 if self._execute_buy_trade(True, 2):
@@ -3294,7 +3294,7 @@ class CryptoTrader:
                     
             # 检查No2价格匹配
             elif self._check_price_match(bids_price_raw, no2_price, False, bids_shares, self.bids_shares):
-                self.logger.info(f"Down 2: {100.0 - bids_price_raw}¢ 价格匹配,执行自动交易")
+                self.logger.info(f"✅ Down 2: {100.0 - bids_price_raw}¢ 价格匹配,执行自动交易")
                 
                 # 执行交易
                 if self._execute_buy_trade(False, 2):
@@ -3344,7 +3344,7 @@ class CryptoTrader:
         
             # 检查Yes3价格匹配
             if self._check_price_match(asks_price_raw, yes3_price, True, asks_shares, self.asks_shares):
-                self.logger.info(f"Up 3: {asks_price_raw}¢ 价格匹配,执行自动交易")
+                self.logger.info(f"✅ Up 3: {asks_price_raw}¢ 价格匹配,执行自动交易")
                 
                 # 执行交易
                 if self._execute_buy_trade(True, 3):
@@ -3375,7 +3375,7 @@ class CryptoTrader:
                     
             # 检查No3价格匹配
             elif self._check_price_match(bids_price_raw, no3_price, False, bids_shares, self.bids_shares):
-                self.logger.info(f"Down 3: {100.0 - bids_price_raw}¢ 价格匹配,执行自动交易")
+                self.logger.info(f"✅ Down 3: {100.0 - bids_price_raw}¢ 价格匹配,执行自动交易")
                 
                 # 执行交易
                 if self._execute_buy_trade(False, 3):
@@ -3413,7 +3413,7 @@ class CryptoTrader:
 
     def only_sell_yes(self):
         """只卖出YES"""
-        self.logger.info("执行only_sell_yes")
+        self.logger.info("✅ 执行only_sell_yes")
 
         # 调用卖出按钮
         self.position_sell_yes_button.invoke()
@@ -3443,7 +3443,7 @@ class CryptoTrader:
        
     def only_sell_no(self):
         """只卖出Down"""
-        self.logger.info("执行only_sell_no")
+        self.logger.info("✅ 执行only_sell_no")
         
         # 调用卖出按钮
         self.position_sell_no_button.invoke()
@@ -3474,7 +3474,7 @@ class CryptoTrader:
     def only_sell_yes3(self):
         """只卖出YES3对应的shares数量"""
         try:
-            self.logger.info("执行only_sell_yes3")
+            self.logger.info("✅ 执行only_sell_yes3")
             
             # 计算要卖出的shares数量
             yes3_shares = self.buy_yes3_amount / (self.default_target_price / 100)
@@ -3503,7 +3503,7 @@ class CryptoTrader:
             
             # 验证交易
             if self._verify_trade('Sold', 'Up')[0]:
-                self.logger.info(f"卖 Up 3 SHARES 成功")
+                self.logger.info(f"✅ 卖 Up 3 SHARES 成功")
                 
                 # 增加卖出计数
                 self.sell_count += 1
@@ -3527,7 +3527,7 @@ class CryptoTrader:
     def only_sell_no3(self):
         """只卖出NO3对应的shares数量"""
         try:
-            self.logger.info("执行only_sell_no3")
+            self.logger.info("✅ 执行only_sell_no3")
             
             # 计算要卖出的shares数量
             no3_shares = self.buy_no3_amount / (self.default_target_price / 100)
@@ -3556,7 +3556,7 @@ class CryptoTrader:
             
             # 验证交易
             if self._verify_trade('Sold', 'Down')[0]:
-                self.logger.info(f"卖 Down 3 SHARES 成功")
+                self.logger.info(f"✅ 卖 Down 3 SHARES 成功")
                 
                 # 增加卖出计数
                 self.sell_count += 1
@@ -3571,7 +3571,7 @@ class CryptoTrader:
                     portfolio_value=self.portfolio_value
                 )
                 
-                self.logger.info(f"卖出 Down 3 SHARES: {no3_shares} 成功")
+                self.logger.info(f"✅ 卖出 Down 3 SHARES: {no3_shares} 成功")
                 
         except Exception as e:
             self.logger.error(f"❌ only_sell_no3执行失败: {str(e)}")
@@ -3626,7 +3626,7 @@ class CryptoTrader:
                 # 查找登录按钮
                 login_button = self.driver.find_element(By.XPATH, XPathConfig.LOGIN_BUTTON[0])
                 if login_button:
-                    self.logger.info("发现登录按钮，尝试登录")
+                    self.logger.info("✅ 发现登录按钮，尝试登录")
                     self.stop_url_monitoring(should_reset=True)
                     self.stop_refresh_page()
 
@@ -3637,7 +3637,7 @@ class CryptoTrader:
                     google_login_button = self.driver.find_element(By.XPATH, XPathConfig.LOGIN_WITH_GOOGLE_BUTTON[0])
                     if google_login_button:
                         google_login_button.click()
-                        self.logger.info("已点击Google登录按钮")
+                        self.logger.info("✅ 已点击Google登录按钮")
                         
                         # 等待10秒，让用户手动登录
                         WebDriverWait(self.driver, 30).until(
@@ -3645,7 +3645,7 @@ class CryptoTrader:
                         )
                         self.url_check_timer = self.root.after(15000, self.enable_url_monitoring)
                         self.refresh_page_timer = self.root.after(240000, self.enable_refresh_page)
-                        self.logger.info("已重新启用URL监控和页面刷新")
+                        self.logger.info("✅ 已重新启用URL监控和页面刷新")
             except NoSuchElementException:
                 # 未找到登录按钮，可能已经登录
                 pass
@@ -3655,7 +3655,7 @@ class CryptoTrader:
                 accept_button = self.driver.find_element(By.XPATH, XPathConfig.ACCEPT_BUTTON[0])
                 if accept_button:
                     accept_button.click()
-                    self.logger.info("已点击ACCEPT按钮")
+                    self.logger.info("✅ 已点击ACCEPT按钮")
             except NoSuchElementException:
                 pass
                 
@@ -3693,7 +3693,7 @@ class CryptoTrader:
             
             # 如果URL基础部分不匹配，重新导航
             if clean_current != clean_target:
-                self.logger.info(f"URL不匹配,重新导航到: {target_url}")
+                self.logger.info(f"❌ URL不匹配,重新导航到: {target_url}")
                 self.driver.get(target_url)
                 
                 # 等待页面加载完成
@@ -3731,9 +3731,9 @@ class CryptoTrader:
             # 完全禁用URL监控(不会被其他线程或定时器自动重启)
             if should_reset:
                 self.url_monitoring_disabled = True
-                self.logger.info("已完全禁用URL监控(不会自动重启)")
+                self.logger.info("❌ 已完全禁用URL监控(不会自动重启)")
             else:
-                self.logger.info("已停止URL监控")
+                self.logger.info("❌ 已停止URL监控")
         except Exception as e:
             self.logger.error(f"停止URL监控失败: {str(e)}")
 
@@ -3787,9 +3787,9 @@ class CryptoTrader:
             # 完全禁用页面刷新(不会被其他线程或定时器自动重启)
             if should_reset:
                 self.refresh_page_disabled = True
-                self.logger.info("已完全禁用页面刷新(不会自动重启)")
+                self.logger.info("❌ 已完全禁用页面刷新(不会自动重启)")
             else:
-                self.logger.info("已停止页面刷新")
+                self.logger.info("❌ 已停止页面刷新")
         except Exception as e:
             self.logger.error(f"停止页面刷新失败: {str(e)}")
 
@@ -3826,7 +3826,7 @@ class CryptoTrader:
                 self.cash_value = float(cash_match.group(1).replace(',', ''))
             
         except Exception as e:
-            self.logger.info(f"检查余额失败: {str(e)}") # 不打印错误,因为余额检查失败是正常现象
+            self.logger.info(f"❌ 检查余额失败") # 不打印错误,因为余额检查失败是正常现象
 
     def check_prices(self):
         """检查价格变化"""
@@ -3872,7 +3872,7 @@ class CryptoTrader:
                 self.Sell_no(up_price, down_price, asks_shares, bids_shares)
                 
         except Exception as e:
-            self.logger.info(f"检查价格失败: {str(e)}") # 不打印错误,因为价格检查失败是正常现象
+            self.logger.info(f"❌ 检查价格失败") # 不打印错误,因为价格检查失败是正常现象
 
     def _verify_trade(self, action_type, direction):
         """
@@ -3927,7 +3927,7 @@ class CryptoTrader:
             
             # 启动URL监控
             self.start_url_monitoring()
-            self.logger.info("已重新启用URL监控")
+            self.logger.info("✅ 已重新启用URL监控")
         except Exception as e:
             self.logger.error(f"启用URL监控失败: {str(e)}")
 
@@ -3939,7 +3939,7 @@ class CryptoTrader:
             
             # 启动页面刷新
             self.refresh_page()
-            self.logger.info("已重新启用页面刷新")
+            self.logger.info("✅ 已重新启用页面刷新")
         except Exception as e:
             self.logger.error(f"启用页面刷新失败: {str(e)}")
 
