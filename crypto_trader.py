@@ -3645,7 +3645,7 @@ class CryptoTrader:
                         )
                         self.url_check_timer = self.root.after(15000, self.enable_url_monitoring)
                         self.refresh_page_timer = self.root.after(240000, self.enable_refresh_page)
-             
+                        self.logger.info("已重新启用URL监控和页面刷新")
             except NoSuchElementException:
                 # 未找到登录按钮，可能已经登录
                 pass
