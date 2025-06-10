@@ -3625,6 +3625,9 @@ class CryptoTrader:
                 login_button = self.driver.find_element(By.XPATH, XPathConfig.LOGIN_BUTTON[0])
                 if login_button:
                     self.logger.info("发现登录按钮，尝试登录")
+                    self.stop_url_monitoring()
+                    self.stop_refresh_page()
+
                     login_button.click()
                     time.sleep(1)
                     
@@ -3635,11 +3638,13 @@ class CryptoTrader:
                         self.logger.info("已点击Google登录按钮")
                         
                         # 等待10秒，让用户手动登录
-                        time.sleep(10)
+                        WebDriverWait(self.driver, 30).until(
+                            lambda driver: driver.execute_script('return document.readyState') == 'complete'
+                        )
                         
             except NoSuchElementException:
                 # 未找到登录按钮，可能已经登录
-                self.logger.info("未找到登录按钮，已经登录")
+                pass
                 
             # 检查是否有ACCEPT按钮（Cookie提示等）
             try:
@@ -3653,11 +3658,14 @@ class CryptoTrader:
         except Exception as e:
             self.logger.error(f"登录监控失败: {str(e)}")
         finally:
+            self.url_check_timer = self.start_url_monitoring()
+            self.refresh_page_timer = self.start_refresh_page()
+            
             with self.login_attempt_lock:
                 self.login_running = False
             
-            # 每10秒检查一次登录状态
-            self.login_check_timer = self.root.after(10000, self.start_login_monitoring)
+            # 每20秒检查一次登录状态
+            self.login_check_timer = self.root.after(20000, self.start_login_monitoring)
 
     def start_url_monitoring(self):
         """监控URL变化"""
