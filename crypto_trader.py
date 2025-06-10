@@ -3641,12 +3641,12 @@ class CryptoTrader:
                         
                         # 等待15秒，让用户手动登录
                         time.sleep(15)
-                        self.url_check_timer = self.root.after(0, self.enable_url_monitoring)
+                        self.driver.get(self.url_entry.get().strip())
+                        time.sleep(2)
                         # 检查是否有ACCEPT按钮（Cookie提示等）
                         try:
-                            time.sleep(2)
-                            # 点击yes1_amount_button
-                            self.amount_yes1_button.invoke()
+                            amount_button = getattr(self, 'amount_yes1_button')
+                            amount_button.event_generate('<Button-1>')
                             time.sleep(0.5)
 
                             # 点击buy_confirm_button
