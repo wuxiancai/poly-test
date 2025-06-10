@@ -412,7 +412,7 @@ class CryptoTrader:
             
             # Linux下简化标签
             label_mapping = {
-                "⚠️ 配置设置": "⚠️ 娟娟细流,终入大海! 宁静致远,财富自由!",
+                "⚠️ 配置设置": "          娟娟细流,终入大海! 宁静致远,财富自由!",
                 "🌐 Website Monitoring": "Website Monitoring",
                 "🎮 Control Panel": "Control Panel",
                 "📊 Trading Information": "Trading Information",
