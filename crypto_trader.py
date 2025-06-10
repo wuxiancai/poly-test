@@ -3641,6 +3641,7 @@ class CryptoTrader:
                         
                         # 等待30秒，让用户手动登录
                         time.sleep(15)
+                        self.driver.get(self.url_entry.get().strip())
                         
                         # 检查是否有ACCEPT按钮（Cookie提示等）
                         try:
