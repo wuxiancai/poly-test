@@ -1469,7 +1469,7 @@ class CryptoTrader:
         """第一次交易价格设置为 0.52 买入"""
         try:
             # 检查价格是否在合理范围内
-            if asks_price_raw is None or asks_price_raw <= 20 or bids_price_raw is None or bids_price_raw >= 97:
+            if asks_price_raw is None or asks_price_raw <= 10 or bids_price_raw is None or bids_price_raw >= 97:
                 return
                 
             # 获取Yes1和No1的GUI界面上的价格
@@ -1515,8 +1515,8 @@ class CryptoTrader:
                     )
             
             # 检查No1价格匹配
-            elif self._check_price_match(bids_price_raw, no1_price, False, bids_shares, self.bids_shares):
-                self.logger.info(f"✅ Down 1: {100.0 - bids_price_raw}¢ 价格匹配,执行自动交易")
+            elif self._check_price_match((100.0 - asks_price_raw), no1_price, False, bids_shares, self.bids_shares):
+                self.logger.info(f"✅ Down 1: {100.0 - asks_price_raw}¢ 价格匹配,执行自动交易")
                 
                 # 执行交易
                 if self._execute_buy_trade(False, 1):
@@ -1562,7 +1562,7 @@ class CryptoTrader:
         """处理Yes2/No2的自动交易"""
         try:
             # 检查价格是否在合理范围内
-            if asks_price_raw is None or asks_price_raw <= 20 or bids_price_raw is None or bids_price_raw >= 97:
+            if asks_price_raw is None or asks_price_raw <= 10 or bids_price_raw is None or bids_price_raw >= 97:
                 return
                 
             # 获取Yes2和No2的价格输入框
@@ -1602,8 +1602,8 @@ class CryptoTrader:
                     self.logger.info("\033[34m✅ Second_trade执行成功\033[0m")
                     
             # 检查No2价格匹配
-            elif self._check_price_match(bids_price_raw, no2_price, False, bids_shares, self.bids_shares):
-                self.logger.info(f"✅ Down 2: {100.0 - bids_price_raw}¢ 价格匹配,执行自动交易")
+            elif self._check_price_match((100.0 - asks_price_raw), no2_price, False, bids_shares, self.bids_shares):
+                self.logger.info(f"✅ Down 2: {100.0 - asks_price_raw}¢ 价格匹配,执行自动交易")
                 
                 # 执行交易
                 if self._execute_buy_trade(False, 2):
@@ -1643,7 +1643,7 @@ class CryptoTrader:
         """处理Yes3/No3的自动交易"""
         try:
             # 检查价格是否在合理范围内
-            if asks_price_raw is None or asks_price_raw <= 20 or bids_price_raw is None or bids_price_raw >= 97:
+            if asks_price_raw is None or asks_price_raw <= 10 or bids_price_raw is None or bids_price_raw >= 97:
                 return
                 
             # 获取Yes3和No3的价格输入框
@@ -1683,8 +1683,8 @@ class CryptoTrader:
                     self.logger.info("\033[34m✅ Third_trade执行成功\033[0m")
                     
             # 检查No3价格匹配
-            elif self._check_price_match(bids_price_raw, no3_price, False, bids_shares, self.bids_shares):
-                self.logger.info(f"✅ Down 3: {100.0 - bids_price_raw}¢ 价格匹配,执行自动交易")
+            elif self._check_price_match((100.0 - asks_price_raw), no3_price, False, bids_shares, self.bids_shares):
+                self.logger.info(f"✅ Down 3: {100.0 - asks_price_raw}¢ 价格匹配,执行自动交易")
                 
                 # 执行交易
                 if self._execute_buy_trade(False, 3):
@@ -1724,7 +1724,7 @@ class CryptoTrader:
         """处理Yes4/No4的自动交易,并在交易后设置特殊价格"""
         try:
             # 检查价格是否在合理范围内
-            if asks_price_raw is None or asks_price_raw <= 20 or bids_price_raw is None or bids_price_raw >= 97:
+            if asks_price_raw is None or asks_price_raw <= 10 or bids_price_raw is None or bids_price_raw >= 97:
                 return
                 
             # 获取Yes4和No4的价格输入框
@@ -1770,8 +1770,8 @@ class CryptoTrader:
                     self.logger.info("\033[34m✅ Forth_trade执行成功\033[0m")
                     
             # 检查No4价格匹配
-            elif self._check_price_match(bids_price_raw, no4_price, False, bids_shares, self.bids_shares):
-                self.logger.info(f"✅ Down 4: {100.0 - bids_price_raw}¢ 价格匹配,执行自动交易")
+            elif self._check_price_match((100.0 - asks_price_raw), no4_price, False, bids_shares, self.bids_shares):
+                self.logger.info(f"✅ Down 4: {100.0 - asks_price_raw}¢ 价格匹配,执行自动交易")
                 
                 # 执行交易
                 if self._execute_buy_trade(False, 4):
