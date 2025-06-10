@@ -3652,10 +3652,19 @@ class CryptoTrader:
                 
             # 检查是否有ACCEPT按钮（Cookie提示等）
             try:
+                # 点击yes1_amount_button
+                self.yes1_amount_button.invoke()
+                time.sleep(0.5)
+
+                # 点击buy_confirm_button
+                self.buy_confirm_button.invoke()
+                time.sleep(1)
+                
                 accept_button = self.driver.find_element(By.XPATH, XPathConfig.ACCEPT_BUTTON[0])
                 if accept_button:
                     accept_button.click()
                     self.logger.info("✅ 已点击ACCEPT按钮")
+                    self.root.after(1000, self.driver.refresh())
             except NoSuchElementException:
                 pass
                 
